@@ -23,7 +23,7 @@ Design is fixed first in [ARCHITECTURE.md](ARCHITECTURE.md); code follows it.
 | T13 | Ingestion service + job runner | ✅ done — upload→preview→confirm→rebuild→cite→remove |
 | T14 | FastAPI backend — chat + admin routes | ✅ done — 12 endpoints, error shapes verified |
 | T15 | Chat UI | ✅ done — provenance panels, degraded banner |
-| T16 | Ingestion UI (`/admin`) | ⬜ |
+| T16 | Ingestion UI (`/admin`) | ✅ done — preview, confirm, job log, remove |
 | T17 | Failure-path hardening | ⬜ |
 | T18 | Sample Q&A document | ⬜ |
 | T19 | README + acceptance checklist | ⬜ |
