@@ -31,3 +31,7 @@ httpx==0.28.1
 
 # T8 - MCP client, bridging MCP tools into LangChain
 langchain-mcp-adapters==0.3.2
+
+# T9 - LLM provider (Groq default). Install langchain-anthropic only if you
+# set LLM_PROVIDER=anthropic.
+langchain-groq==1.1.3
