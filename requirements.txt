@@ -6,3 +6,9 @@
 
 # T1 - typed configuration loaded from .env
 pydantic-settings==2.15.0
+
+# T2 - knowledge-base acquisition (HTML cleanup + markdown conversion).
+# The fetcher uses stdlib urllib, not httpx: see app/ingest/fetch_sources.py
+# for why. httpx arrives in T6 for the MCP servers.
+beautifulsoup4==4.15.0
+markdownify==1.2.3

@@ -1,7 +1,7 @@
 # Architecture — AI Travel Planning Assistant (Singapore)
 
 > Design document, written before implementation. Diagrams are Mermaid and render directly on GitHub.
-> Status: **T0 — design only. No code exists yet.**
+> Status: design agreed in T0. Sections marked **as built** record where implementation differed.
 
 ## 1. What this system is
 
@@ -145,24 +145,40 @@ flowchart TB
     IDX --> RELOAD
 ```
 
-**Curated seed sources** (the CLI path — ≥3 required, this gives 7 documents across 4 publishers):
+**Curated seed sources** (the CLI path — the brief requires ≥3 public resources; this delivers 15):
 
-| Source | Licence | Shipped how |
-|---|---|---|
-| Wikivoyage: Singapore + 5 district pages | CC BY-SA 4.0 | committed snapshot |
-| Wikipedia: Mass Rapid Transit (Singapore) | CC BY-SA 4.0 | committed snapshot |
-| Wikipedia: Singaporean cuisine | CC BY-SA 4.0 | committed snapshot |
-| Visit Singapore: essential info / itineraries / things to do | restrictive | fetched at setup, gitignored |
+| Source | Docs | Licence | Shipped how |
+|---|---|---|---|
+| Wikivoyage: Singapore + 10 district pages | 11 | CC BY-SA 4.0 | committed snapshot |
+| Wikipedia: Mass Rapid Transit (Singapore) | 1 | CC BY-SA 4.0 | committed snapshot |
+| Wikipedia: Singaporean cuisine | 1 | CC BY-SA 4.0 | committed snapshot |
+| Wikipedia: Tourism in Singapore | 1 | CC BY-SA 4.0 | committed snapshot |
+| Wikipedia: Culture of Singapore | 1 | CC BY-SA 4.0 | committed snapshot |
+| Visit Singapore: essential info / itineraries / things to do | 0 | restrictive | **attempted, unavailable** |
+
+**15 documents, ~523,000 characters, 132 `##` sections and 211 `###` sections.** The Wikivoyage district
+pages carry the POI-level detail that makes answers useful -- addresses, opening hours, prices -- so the
+HTML cleanup deliberately preserves Wikivoyage listing markup while stripping navigation and map widgets.
+The two large Wikipedia articles are section-filtered at fetch time (MRT keeps Network, Fares, Hours and
+Regulations and drops History, Rolling stock, Ridership and Security) so that railfan and corporate
+content does not dominate transport retrieval.
 
 Anything a user adds later through the admin UI is recorded in the same registry with
 `origin: "url"` or `origin: "upload"`, so a citation from an uploaded PDF looks exactly like a citation
 from Wikivoyage.
 
 **Licensing is handled in the pipeline, not ignored.** Wikimedia sources are CC BY-SA and their
-snapshots are **committed** to the repo. Visit Singapore's terms are restrictive, so those documents are
-**fetched at setup time and gitignored** — the repo ships the instructions, not the content. The four
-Wikimedia documents on their own already exceed the three-source minimum, so a Visit Singapore fetch
-failure is a warning, never a build failure.
+snapshots are **committed** to the repo. Visit Singapore's terms are restrictive, so those documents were
+never going to be committed — the repo would ship the instructions, not the content.
+
+**Visit Singapore turned out to be unusable anyway.** Every page on that site renders entirely on the
+client: a plain HTTP fetch of the itineraries page yields 17 characters of text, and the essential-info
+page 106. Extracting it would need a headless browser, which is out of proportion here and would not
+change the licensing problem. Rather than drop the source silently, the fetcher **records the attempt in
+the registry as `unavailable` with the measured reason**, and its facets are covered by the two Wikipedia
+additions above — Tourism in Singapore for attractions, Culture of Singapore for cultural guidance —
+plus the itinerary material already in the Wikivoyage guide. A failed optional source is a warning,
+never a build failure.
 
 **Why chunk on headings first.** Travel guides are strongly sectioned ("See", "Eat", "Get around",
 "Itineraries"). Splitting blindly at N characters severs an attraction from its opening hours and its

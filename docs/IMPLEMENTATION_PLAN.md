@@ -8,8 +8,8 @@ Design is fixed first in [ARCHITECTURE.md](ARCHITECTURE.md); code follows it.
 | Task | Description | Status |
 |---|---|---|
 | T0 | Architecture diagrams & design doc | ✅ done — [ARCHITECTURE.md](ARCHITECTURE.md) |
-| T1 | Scaffold, config, dependency workflow | ⬜ |
-| T2 | Source registry + knowledge-base acquisition | ⬜ |
+| T1 | Scaffold, config, dependency workflow | ✅ done — `app/config.py`, `pyproject.toml`, `.env.example` |
+| T2 | Source registry + knowledge-base acquisition | ✅ done — 15 docs, 522 KB, `sources.json` |
 | T3 | Heading-aware chunking + category tagging | ⬜ |
 | T4 | Embeddings + FAISS index + atomic swap | ⬜ |
 | T5 | Retriever + grounding guard + index reload | ⬜ |
@@ -74,9 +74,11 @@ resolved pin to `requirements.txt`.
 
 ### Licensing
 Wikimedia sources are CC BY-SA and committed as snapshots. Visit Singapore's terms are restrictive, so
-those are fetched at setup and gitignored — the repo ships instructions, not the content. The four
-Wikimedia documents alone exceed the three-source minimum, so a Visit Singapore fetch failure is a
-warning, never a build failure.
+those would never be committed. **As built:** Visit Singapore proved to be entirely client-rendered
+(17–106 characters of server-rendered text per page), so all three of its pages are recorded in the
+registry as `unavailable` with the measured reason rather than dropped. Two extra Wikipedia articles
+(Tourism in Singapore, Culture of Singapore) cover the attractions and cultural-guidance facets instead.
+Delivered: **15 documents, ~523 KB, 2 publishers** — comfortably past the three-resource minimum.
 
 ---
 
@@ -150,9 +152,19 @@ exist in the interpreter; pin into the venv when a task first imports them).
 ### T2 — Source registry + KB acquisition
 `app/ingest/registry.py` — load/save `data/kb/sources.json`, add/remove/update entries, per-source chunk
 counts. This is the authority on KB contents from the start, because T13's UI manages the same file.
-`app/ingest/fetch_sources.py` — seed the curated set: Wikivoyage Singapore + 5 district pages, Wikipedia
-MRT, Wikipedia Singaporean cuisine (committed), and 3 Visit Singapore pages (fetched, gitignored). Wikimedia
-via the REST HTML endpoint; strip nav/edit/ref cruft; emit markdown that **preserves heading hierarchy**.
+`app/ingest/fetch_sources.py` — seed the curated set. **As built:** Wikivoyage Singapore + 10 district
+pages and 4 Wikipedia articles (MRT, Singaporean cuisine, Tourism in Singapore, Culture of Singapore),
+all committed; 3 Visit Singapore pages attempted and recorded `unavailable`. Wikimedia via the REST HTML
+endpoint; strip nav/edit/ref cruft but **keep Wikivoyage POI listings** (addresses, hours, prices);
+per-source section filtering for the large Wikipedia articles; emit markdown that **preserves heading
+hierarchy**.
+
+Two things the environment forced, both documented in code so they do not get "fixed" back:
+- **Transport is stdlib `urllib`, not `httpx`.** Wikimedia's bot protection answers httpx with 403
+  regardless of User-Agent, Accept, Accept-Encoding, Connection or ALPN — it fingerprints below the HTTP
+  layer. urllib is served normally. httpx arrives in T6, whose upstreams do no such filtering.
+- **Throttle + `Retry-After` backoff.** A 0.4 s gap earned HTTP 429 part-way through the set; requests are
+  now spaced 1.5 s apart with up to 4 retries honouring the server's `Retry-After`.
 Each doc gets YAML frontmatter: `source_id`, `source_title`, `source_url`, `license`, `publisher`,
 `origin: curated`, `retrieved_at`. Idempotent, prints a per-source status table, tolerates Visit Singapore
 failure with a warning.
