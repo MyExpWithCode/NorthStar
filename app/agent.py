@@ -19,10 +19,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import (
+    ClearToolUsesEdit,
+    ContextEditingMiddleware,
+)
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from app import llm, mcp_client, prompts
+from app.config import settings
 from app.mcp_client import McpToolset, parse_tool_payload
 from app.rag.kb_tool import search_travel_knowledge_base
 
@@ -70,11 +75,31 @@ async def build_agent() -> TravelAgent:
     tools = [search_travel_knowledge_base, *toolset.tools]
     checkpointer = InMemorySaver()
 
+    # Retrieval excerpts accumulate in history and are the bulk of every
+    # request. Left alone, the third turn of a conversation gets rejected as
+    # too large. This clears tool results from earlier turns once the context
+    # passes the trigger, while keeping the most recent ones so the current
+    # turn always still has its evidence.
+    context_editing = ContextEditingMiddleware(
+        edits=[
+            ClearToolUsesEdit(
+                trigger=settings.context_trim_trigger_tokens,
+                keep=settings.context_trim_keep_results,
+                clear_tool_inputs=True,
+                placeholder=(
+                    "[earlier tool result cleared to save context; "
+                    "search again if you need it]"
+                ),
+            )
+        ]
+    )
+
     graph = create_agent(
         model,
         tools=tools,
         system_prompt=prompts.system_prompt(toolset.prompt_note()),
         checkpointer=checkpointer,
+        middleware=[context_editing],
     )
     return TravelAgent(
         graph=graph,

@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from app import agent as agent_module
 from app import llm, mcp_client
-from app.config import settings
+from app.config import dotenv_keys_shadowed_by_environment, settings
 from app.ingest.registry import SourceRegistry
 from app.ingest.service import IngestionError, service as ingestion
 from app.rag import retriever
@@ -41,6 +41,15 @@ async def lifespan(app: FastAPI):
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
+
+    shadowed = dotenv_keys_shadowed_by_environment()
+    if shadowed:
+        logger.warning(
+            "These keys are set in .env but OVERRIDDEN by real environment "
+            "variables, which take precedence: %s. Unset them in your shell "
+            "if you meant the .env values to apply.",
+            ", ".join(shadowed),
+        )
 
     # The retriever needs to know when a rebuild lands so chat picks it up
     # without a restart.
@@ -165,6 +174,9 @@ async def health() -> dict:
         "status": "ok" if (_agent is not None and index["ready"]) else "degraded",
         "startup_error": _startup_error,
         "destination": settings.destination,
+        "dotenv_keys_shadowed_by_environment": (
+            dotenv_keys_shadowed_by_environment()
+        ),
         "llm": llm.describe(),
         "knowledge_base": {
             "ready": index["ready"],

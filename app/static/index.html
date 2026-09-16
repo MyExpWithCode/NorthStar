@@ -1,1 +1,343 @@
-<!doctype html><title>Chat</title><p>Chat UI arrives in T15.</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Singapore Travel Assistant</title>
+<!--
+  Deliberately one file, no build step. The interesting part of this UI is not
+  its styling but the two evidence panels under every answer: knowledge-base
+  citations with clickable source links, and the MCP tool calls with their
+  timestamps. Those are what make the assistant's provenance checkable rather
+  than merely claimed.
+-->
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2029; --panel-2: #232b36; --line: #313b49;
+    --text: #e6edf3; --muted: #8b98a8; --accent: #4a9eff; --kb: #7ee787;
+    --mcp: #79c0ff; --warn: #f0883e; --err: #ff7b72;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; height: 100vh;
+  }
+  header {
+    padding: 12px 20px; background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .spacer { flex: 1; }
+  header a, header button {
+    color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer;
+    text-decoration: none;
+  }
+  header button:hover, header a:hover { border-color: var(--accent); }
+  #status { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+  #banner {
+    display: none; margin: 0; padding: 10px 20px;
+    background: #3d2b12; border-bottom: 1px solid var(--warn);
+    color: #ffd7a8; font-size: 13px;
+  }
+
+  #log { flex: 1; overflow-y: auto; padding: 20px; }
+  .turn { max-width: 860px; margin: 0 auto 22px; }
+  .role {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  .bubble {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .user .bubble { background: var(--panel-2); }
+  .bubble :first-child { margin-top: 0; }
+  .bubble :last-child { margin-bottom: 0; }
+  .bubble h1, .bubble h2, .bubble h3 { font-size: 1.05em; margin: 1.1em 0 .4em; }
+  .bubble table { border-collapse: collapse; margin: .6em 0; font-size: .92em; }
+  .bubble th, .bubble td { border: 1px solid var(--line); padding: 4px 9px; }
+  .bubble code {
+    background: var(--panel-2); padding: 1px 5px; border-radius: 4px;
+    font-family: var(--mono); font-size: .9em;
+  }
+  .bubble a { color: var(--accent); }
+
+  details.panel {
+    margin-top: 10px; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  details.panel > summary {
+    cursor: pointer; padding: 8px 14px; font-size: 13px; color: var(--muted);
+    user-select: none;
+  }
+  details.panel > summary:hover { color: var(--text); }
+  details.panel > div { padding: 0 14px 12px; }
+  .src, .call {
+    border-top: 1px solid var(--line); padding: 9px 0; font-size: 13px;
+  }
+  .src:first-child, .call:first-child { border-top: none; }
+  .marker {
+    display: inline-block; min-width: 30px; font-family: var(--mono);
+    color: var(--kb); font-weight: 600;
+  }
+  .src a { color: var(--accent); }
+  .meta { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+  .tool { font-family: var(--mono); color: var(--mcp); }
+  .ok { color: var(--kb); } .bad { color: var(--err); }
+  .args {
+    font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+    word-break: break-all;
+  }
+
+  footer {
+    padding: 14px 20px; background: var(--panel);
+    border-top: 1px solid var(--line);
+  }
+  .composer { max-width: 860px; margin: 0 auto; display: flex; gap: 10px; }
+  #input {
+    flex: 1; resize: none; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; padding: 11px 13px;
+    font: inherit; min-height: 46px; max-height: 180px;
+  }
+  #input:focus { outline: none; border-color: var(--accent); }
+  #send {
+    background: var(--accent); color: #04121f; border: 0; border-radius: 8px;
+    padding: 0 22px; font-weight: 600; cursor: pointer;
+  }
+  #send:disabled { opacity: .5; cursor: default; }
+  .hints { max-width: 860px; margin: 10px auto 0; font-size: 12px; }
+  .hints button {
+    background: transparent; color: var(--muted); border: 1px solid var(--line);
+    border-radius: 20px; padding: 4px 11px; margin: 0 6px 6px 0;
+    cursor: pointer; font-size: 12px;
+  }
+  .hints button:hover { color: var(--text); border-color: var(--accent); }
+  .thinking { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Singapore Travel Assistant</h1>
+  <span id="status">connecting…</span>
+  <span class="spacer"></span>
+  <button id="newchat" type="button">New conversation</button>
+  <a href="/admin">Knowledge base</a>
+  <a href="/health" target="_blank">Health</a>
+</header>
+
+<p id="banner"></p>
+
+<div id="log">
+  <div class="turn">
+    <div class="role">assistant</div>
+    <div class="bubble">
+      <p><strong>Ask about a trip to Singapore.</strong></p>
+      <p>Destination facts come from a knowledge base built from Wikivoyage and
+      Wikipedia. Weather and exchange rates come from MCP tools that call
+      Open-Meteo and the European Central Bank. Every answer shows which it
+      used — expand the panels beneath any reply.</p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="Create a three-day Singapore itinerary for next week and adjust it to the weather forecast…"></textarea>
+    <button id="send" type="button">Send</button>
+  </div>
+  <div class="hints" id="hints"></div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script>
+const SESSION_KEY = "northstar-session";
+const log = document.getElementById("log");
+const input = document.getElementById("input");
+const send = document.getElementById("send");
+const banner = document.getElementById("banner");
+const statusEl = document.getElementById("status");
+
+let sessionId = localStorage.getItem(SESSION_KEY) || "";
+let busy = false;
+
+const EXAMPLES = [
+  "What are the must-visit attractions in Singapore?",
+  "What is the weather in Singapore right now?",
+  "Convert INR 50,000 to SGD",
+  "Create a three-day itinerary for next week and adjust it to the forecast",
+  "Which neighbourhoods are best for cultural experiences?",
+  "What indoor attractions can I visit?",
+];
+
+document.getElementById("hints").innerHTML = EXAMPLES
+  .map((q) => `<button type="button" data-q="${q.replace(/"/g, "&quot;")}">${q}</button>`)
+  .join("");
+document.getElementById("hints").addEventListener("click", (event) => {
+  const q = event.target.dataset.q;
+  if (q && !busy) { input.value = q; ask(); }
+});
+
+function escapeHtml(text) {
+  return String(text ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function addTurn(role, htmlBody) {
+  const turn = document.createElement("div");
+  turn.className = `turn ${role}`;
+  turn.innerHTML =
+    `<div class="role">${role}</div><div class="bubble">${htmlBody}</div>`;
+  log.appendChild(turn);
+  log.scrollTop = log.scrollHeight;
+  return turn;
+}
+
+// Knowledge-base citations. These come from the retrieval tool's artifact, not
+// from parsing the answer text, so a link here always corresponds to a chunk
+// that was really retrieved.
+function sourcesPanel(sources) {
+  if (!sources.length) return "";
+  const rows = sources.map((s) => `
+    <div class="src">
+      <span class="marker">[${escapeHtml(s.marker)}]</span>
+      <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.title)}</a>
+      <div class="meta">${escapeHtml(s.section_path)}</div>
+      <div class="meta">relevance ${Number(s.score).toFixed(2)}
+        · ${escapeHtml(s.license)}
+        · ${escapeHtml((s.categories || []).join(", "))}</div>
+    </div>`).join("");
+  return `<details class="panel"><summary>📚 Knowledge-base sources
+    (${sources.length})</summary><div>${rows}</div></details>`;
+}
+
+// MCP tool calls, with the timestamp the data was retrieved and an explicit
+// failure line when a tool could not answer.
+function toolsPanel(calls) {
+  if (!calls.length) return "";
+  const rows = calls.map((c) => {
+    const state = c.ok
+      ? `<span class="ok">ok</span>`
+      : `<span class="bad">failed</span>`;
+    const detail = c.ok
+      ? escapeHtml(c.detail || "")
+      : escapeHtml(c.error || "no result");
+    const when = c.retrieved_at
+      ? ` · retrieved ${escapeHtml(c.retrieved_at)}` : "";
+    const upstream = c.source ? ` · ${escapeHtml(c.source)}` : "";
+    return `
+      <div class="call">
+        <span class="tool">${escapeHtml(c.tool)}</span>
+        <span class="meta">(${escapeHtml(c.server || "?")})</span> ${state}
+        <div class="meta">${detail}${when}${upstream}</div>
+        <div class="args">${escapeHtml(JSON.stringify(c.args || {}))}</div>
+      </div>`;
+  }).join("");
+  const failed = calls.filter((c) => !c.ok).length;
+  const label = failed ? `🌐 Tool calls (${calls.length}, ${failed} failed)`
+                       : `🌐 Tool calls (${calls.length})`;
+  return `<details class="panel"><summary>${label}</summary><div>${rows}</div></details>`;
+}
+
+function showDegraded(degraded) {
+  if (!degraded || !degraded.length) { banner.style.display = "none"; return; }
+  banner.style.display = "block";
+  banner.innerHTML = "⚠ Reduced capability: " + degraded
+    .map((d) => `<strong>${escapeHtml(d.capability)}</strong> unavailable
+       (${escapeHtml(d.reason)})`)
+    .join("; ") + ". The assistant will say so rather than guess.";
+}
+
+async function ask() {
+  const message = input.value.trim();
+  if (!message || busy) return;
+  busy = true;
+  send.disabled = true;
+  input.value = "";
+  input.style.height = "auto";
+
+  addTurn("user", `<p>${escapeHtml(message)}</p>`);
+  const pending = addTurn("assistant", `<p class="thinking">Searching the
+    knowledge base and calling tools…</p>`);
+
+  try {
+    const response = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, session_id: sessionId }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || `HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    sessionId = data.session_id;
+    localStorage.setItem(SESSION_KEY, sessionId);
+
+    pending.querySelector(".bubble").innerHTML =
+      marked.parse(data.answer || "(empty answer)")
+      + sourcesPanel(data.kb_sources || [])
+      + toolsPanel(data.tool_calls || []);
+    showDegraded(data.degraded_tools);
+  } catch (error) {
+    pending.querySelector(".bubble").innerHTML =
+      `<p class="bad">Request failed: ${escapeHtml(error.message)}</p>
+       <p class="meta">Nothing above is a travel fact.</p>`;
+  } finally {
+    busy = false;
+    send.disabled = false;
+    input.focus();
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+send.addEventListener("click", ask);
+input.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); ask(); }
+});
+input.addEventListener("input", () => {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 180) + "px";
+});
+
+document.getElementById("newchat").addEventListener("click", async () => {
+  if (sessionId) {
+    await fetch("/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId }),
+    }).catch(() => {});
+  }
+  localStorage.removeItem(SESSION_KEY);
+  sessionId = "";
+  log.innerHTML = `<div class="turn"><div class="role">assistant</div>
+    <div class="bubble"><p>New conversation. Previous context forgotten.</p>
+    </div></div>`;
+});
+
+(async function boot() {
+  try {
+    const health = await (await fetch("/health")).json();
+    const kb = health.knowledge_base.manifest || {};
+    statusEl.textContent =
+      `${health.llm.model || "no model"} · ${kb.chunk_count || 0} chunks · `
+      + `${Object.values(health.mcp.servers || {}).flat().length} MCP tools`;
+    showDegraded(health.mcp.degraded);
+    if (!health.knowledge_base.ready) {
+      banner.style.display = "block";
+      banner.textContent =
+        "⚠ No knowledge-base index has been built. Destination questions "
+        + "cannot be answered until you build one — see the Knowledge base page.";
+    }
+  } catch {
+    statusEl.textContent = "backend unreachable";
+  }
+  input.focus();
+})();
+</script>
+</body>
+</html>

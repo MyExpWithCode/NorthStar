@@ -96,33 +96,24 @@ def search_travel_knowledge_base(
     query: str,
     categories: Annotated[
         list[str],
-        "Optional tag filter; must be chosen from exactly these values: "
-        "attractions, neighbourhoods, transport, culture, practical, food, "
-        "itinerary, shopping, accommodation, indoor, outdoor. Use ['indoor'] "
-        "for wet-weather alternatives, ['outdoor'] for fair-weather "
-        "activities, ['itinerary'] for day-by-day plans, ['transport'] for "
-        "getting around. Pass an empty list to search everything. A chunk must "
-        "carry ALL the tags you list, so prefer one tag at a time.",
+        "Optional single-tag filter, one of: attractions, neighbourhoods, "
+        "transport, culture, practical, food, itinerary, shopping, "
+        "accommodation, indoor, outdoor. [] searches everything.",
     ] = [],
     k: Annotated[int, "How many excerpts to return. 0 means the default of 6."] = 0,
 ) -> tuple[str, dict]:
     """Search the Singapore travel knowledge base for destination facts.
 
-    Use this for anything about the destination itself: attractions,
-    neighbourhoods, getting around, food, culture, practical tips, opening
-    hours, prices, and sample itineraries.
+    The only permitted source of destination facts: attractions,
+    neighbourhoods, transport, food, culture, practical tips, opening
+    hours, prices and itineraries. Do not answer destination questions
+    from your own knowledge. Not for weather or exchange rates.
 
-    This is the only permitted source of destination facts. Do not answer
-    destination questions from your own knowledge.
-
-    Do NOT use this for current information -- weather and exchange rates come
-    from the MCP tools instead.
-
-    Returns numbered excerpts `[S1]`, `[S2]`, ... each with its source title,
-    section path, relevance score and URL. Cite them by marker. If the result
-    begins with NO_RELEVANT_CONTENT, say the knowledge base does not cover the
-    topic rather than answering anyway.
+    Returns excerpts marked [S1], [S2] with source, section and relevance
+    score; cite them by marker. NO_RELEVANT_CONTENT means the knowledge
+    base does not cover the topic -- say so rather than answering anyway.
     """
+
     requested = [c.strip().lower() for c in (categories or []) if c and c.strip()]
     known = [c for c in requested if c in VALID_CATEGORIES]
     unknown = [c for c in requested if c not in VALID_CATEGORIES]

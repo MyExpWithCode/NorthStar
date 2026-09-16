@@ -7,6 +7,7 @@ the app cannot be pointed at a knowledge base it did not build.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -57,6 +58,20 @@ class Settings(BaseSettings):
     relevance_floor: float = Field(default=0.60, ge=0.0, le=1.0)
     chunk_size: int = Field(default=900, ge=200)
     chunk_overlap: int = Field(default=120, ge=0)
+
+    # -- Conversation context -----------------------------------------------
+    #: Token count above which older tool results are cleared from the
+    #: conversation history.
+    #:
+    #: Retrieval excerpts dominate history, and they accumulate: without
+    #: trimming, the third turn of a conversation was rejected by Groq with
+    #: HTTP 413 (request too large). The library default is 100,000, which
+    #: is meaningless against an 8,000 tokens-per-minute budget. Recent
+    #: results are kept so the current turn always has its evidence; older
+    #: ones are replaced by a placeholder, and the model can search again
+    #: if it needs them.
+    context_trim_trigger_tokens: int = Field(default=4000, ge=1000)
+    context_trim_keep_results: int = Field(default=3, ge=1, le=20)
 
     # -- Ingestion UI -------------------------------------------------------
     max_upload_mb: int = Field(default=20, ge=1, le=200)
@@ -125,6 +140,34 @@ class Settings(BaseSettings):
             return None
         value = secret.get_secret_value().strip()
         return value or None
+
+
+def dotenv_keys_shadowed_by_environment() -> list[str]:
+    """Keys set in BOTH `.env` and the real environment, with different values.
+
+    pydantic-settings gives environment variables precedence over the
+    `.env` file, which is correct for deployment but a nasty trap locally:
+    the documented setup is to edit `.env`, yet a stale machine-level
+    variable silently wins and the app appears to ignore the file. This is
+    reported at startup and by GET /health so the conflict is visible
+    instead of costing someone an hour.
+    """
+    dotenv_path = PROJECT_ROOT / '.env'
+    if not dotenv_path.is_file():
+        return []
+    shadowed: list[str] = []
+    for line in dotenv_path.read_text(encoding='utf-8').splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, _, value = line.partition('=')
+        key, value = key.strip(), value.strip().strip('"').strip(chr(39))
+        if not value:
+            continue
+        actual = os.environ.get(key)
+        if actual is not None and actual != value:
+            shadowed.append(key)
+    return shadowed
 
 
 settings = Settings()

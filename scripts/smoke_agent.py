@@ -95,7 +95,7 @@ def called_tools(provenance: agent_module.Provenance) -> set[str]:
     return {call["tool"] for call in provenance.tool_calls}
 
 
-async def main(verbose: bool) -> int:
+async def main(verbose: bool, only_multiturn: bool = False) -> int:
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
     failures: list[str] = []
     skipped: list[str] = []
@@ -110,7 +110,8 @@ async def main(verbose: bool) -> int:
         failures.append("agent started with degraded tools; results are not comparable")
     print()
 
-    for index, scenario in enumerate(SCENARIOS, start=1):
+    for index, scenario in enumerate([] if only_multiturn else SCENARIOS,
+                                      start=1):
         print("=" * 78)
         print(f"{index}. {scenario['label']}")
         print(f"   Q: {scenario['question']}")
@@ -235,5 +236,7 @@ def _report(failures: list[str], skipped: list[str]) -> int:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--verbose", action="store_true", help="Print full answers.")
+    parser.add_argument("--only-multiturn", action="store_true",
+                        help="Skip the tool-selection scenarios (saves LLM quota).")
     args = parser.parse_args()
-    sys.exit(asyncio.run(main(args.verbose)))
+    sys.exit(asyncio.run(main(args.verbose, args.only_multiturn)))

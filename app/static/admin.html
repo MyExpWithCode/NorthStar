@@ -1,1 +1,460 @@
-<!doctype html><title>Admin</title><p>Ingestion UI arrives in T16.</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge base — Singapore Travel Assistant</title>
+<!--
+  The ingestion page. Its job is to make the RAG pipeline inspectable instead of
+  hiding it behind scripts: what is indexed, under what licence, how many chunks
+  each source contributes, and what happens when you add or remove one.
+
+  Two behaviours matter more than the styling:
+    * Nothing is committed until you confirm a preview, so a PDF that extracts
+      as noise is visible before it can reach the index.
+    * Destructive controls are disabled while a rebuild job is running.
+
+  Local-only and unauthenticated by design -- see the note at the foot of the
+  page and the README.
+-->
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a2029; --panel-2: #232b36; --line: #313b49;
+    --text: #e6edf3; --muted: #8b98a8; --accent: #4a9eff; --ok: #7ee787;
+    --warn: #f0883e; --err: #ff7b72;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    padding: 12px 20px; background: var(--panel);
+    border-bottom: 1px solid var(--line); display: flex; gap: 16px;
+    align-items: center; flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .spacer { flex: 1; }
+  a.btn, button {
+    color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer;
+    text-decoration: none; font-family: inherit;
+  }
+  button:hover:not(:disabled), a.btn:hover { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: #04121f; border: 0; font-weight: 600; }
+  button.danger { color: var(--err); }
+
+  main { max-width: 1040px; margin: 0 auto; padding: 22px 20px 60px; }
+  section {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; margin-bottom: 20px; overflow: hidden;
+  }
+  section > h2 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted); margin: 0; padding: 11px 16px;
+    border-bottom: 1px solid var(--line); background: var(--panel-2);
+  }
+  section > .body { padding: 16px; }
+
+  .stats { display: flex; flex-wrap: wrap; gap: 26px; }
+  .stat .k {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted);
+  }
+  .stat .v { font-size: 19px; font-family: var(--mono); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-family: var(--mono); text-align: right; }
+  .tag {
+    display: inline-block; font-size: 11px; font-family: var(--mono);
+    padding: 1px 7px; border-radius: 10px; border: 1px solid var(--line);
+    color: var(--muted);
+  }
+  .tag.curated { color: var(--ok); } .tag.upload { color: var(--accent); }
+  .tag.url { color: var(--accent); }
+  .state-unavailable, .state-missing { color: var(--warn); }
+  .src-title { font-weight: 500; }
+  .src-title a { color: var(--accent); text-decoration: none; }
+  .note { color: var(--muted); font-size: 12px; }
+
+  .row { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+  input[type=text], input[type=url] {
+    flex: 1; min-width: 260px; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px;
+    font: inherit;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  #drop {
+    border: 1.5px dashed var(--line); border-radius: 8px; padding: 26px;
+    text-align: center; color: var(--muted); cursor: pointer;
+  }
+  #drop.over { border-color: var(--accent); color: var(--text); background: var(--panel-2); }
+
+  #preview { display: none; }
+  #previewText {
+    background: #0b0f14; border: 1px solid var(--line); border-radius: 6px;
+    padding: 12px; max-height: 300px; overflow: auto; white-space: pre-wrap;
+    font-family: var(--mono); font-size: 12px; color: #c9d4e0;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 200px; flex: 1; }
+  .field label { font-size: 11px; text-transform: uppercase; color: var(--muted); }
+
+  #jobs { display: none; }
+  .joblog {
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    background: #0b0f14; border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px; max-height: 190px; overflow: auto;
+  }
+  .pill { font-family: var(--mono); font-size: 12px; }
+  .pill.running { color: var(--accent); } .pill.succeeded { color: var(--ok); }
+  .pill.failed { color: var(--err); } .pill.queued { color: var(--muted); }
+
+  #toast {
+    position: fixed; right: 18px; bottom: 18px; max-width: 420px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-left: 3px solid var(--accent); border-radius: 8px;
+    padding: 12px 14px; font-size: 13px; display: none;
+  }
+  #toast.error { border-left-color: var(--err); }
+  footer.legal { color: var(--muted); font-size: 12px; text-align: center; padding-bottom: 30px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Knowledge base</h1>
+  <span class="spacer"></span>
+  <a class="btn" href="/">← Chat</a>
+  <a class="btn" href="/health" target="_blank">Health</a>
+  <button id="rebuild" type="button">Rebuild index</button>
+</header>
+
+<main>
+  <section>
+    <h2>Index</h2>
+    <div class="body">
+      <div class="stats" id="stats"><span class="note">loading…</span></div>
+    </div>
+  </section>
+
+  <section id="jobs">
+    <h2>Rebuild job</h2>
+    <div class="body">
+      <p><span id="jobId" class="pill"></span>
+         <span id="jobState" class="pill"></span>
+         <span id="jobStage" class="note"></span></p>
+      <div class="joblog" id="jobLog"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Sources</h2>
+    <div class="body" style="padding:0">
+      <table>
+        <thead><tr>
+          <th>Document</th><th>Origin</th><th>Licence</th>
+          <th class="num">Chunks</th><th></th>
+        </tr></thead>
+        <tbody id="sources"><tr><td colspan="5" class="note" style="padding:16px">
+          loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Add a source</h2>
+    <div class="body">
+      <div class="row" style="margin-bottom:14px">
+        <input type="url" id="url" placeholder="https://example.com/travel-page">
+        <button id="fetchUrl" type="button">Fetch preview</button>
+      </div>
+      <div id="drop">
+        <strong>Drop a file here</strong> or click to choose<br>
+        <span class="note" id="dropTypes"></span>
+      </div>
+      <input type="file" id="file" style="display:none">
+    </div>
+  </section>
+
+  <section id="preview">
+    <h2>Preview — nothing is indexed until you confirm</h2>
+    <div class="body">
+      <div class="stats" style="margin-bottom:14px">
+        <div class="stat"><div class="k">Format</div><div class="v" id="pFormat"></div></div>
+        <div class="stat"><div class="k">Characters</div><div class="v" id="pChars"></div></div>
+        <div class="stat"><div class="k">Headings</div><div class="v" id="pHeadings"></div></div>
+      </div>
+      <p id="pWarnings" class="note"></p>
+      <div class="row" style="margin-bottom:14px">
+        <div class="field"><label for="pTitle">Title</label>
+          <input type="text" id="pTitle"></div>
+        <div class="field"><label for="pLicence">Licence</label>
+          <input type="text" id="pLicence"></div>
+        <div class="field"><label for="pPublisher">Publisher</label>
+          <input type="text" id="pPublisher"></div>
+      </div>
+      <div id="previewText"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="primary" id="confirm" type="button">Add to knowledge base</button>
+        <button id="discard" type="button">Discard</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="legal">
+    This page is unauthenticated and intended for local use only.
+  </footer>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let pendingToken = null;
+let pollTimer = null;
+let jobRunning = false;
+
+function escapeHtml(text) {
+  return String(text ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function toast(message, isError) {
+  const el = $("toast");
+  el.textContent = message;
+  el.className = isError ? "error" : "";
+  el.style.display = "block";
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { el.style.display = "none"; }, isError ? 9000 : 4500);
+}
+
+async function api(path, options) {
+  const response = await fetch(path, options);
+  let body = {};
+  try { body = await response.json(); } catch { /* empty body */ }
+  if (!response.ok) throw new Error(body.detail || `HTTP ${response.status}`);
+  return body;
+}
+
+// Destructive controls are disabled while a rebuild is in flight, so a source
+// cannot be removed from under a running embedding pass.
+function setBusy(busy) {
+  jobRunning = busy;
+  $("rebuild").disabled = busy;
+  $("confirm").disabled = busy;
+  $("fetchUrl").disabled = busy;
+  document.querySelectorAll("button.danger").forEach((b) => { b.disabled = busy; });
+}
+
+function renderStats(status) {
+  const index = status.index || {};
+  const built = index.built_at
+    ? new Date(index.built_at).toLocaleString() : "never";
+  $("stats").innerHTML = [
+    ["Status", status.index_ready ? "ready" : "not built"],
+    ["Built", built],
+    ["Model", index.embedding_model || "—"],
+    ["Dimensions", index.dimension || "—"],
+    ["Chunks", (index.chunk_count ?? 0).toLocaleString()],
+    ["Sources", status.source_count ?? 0],
+  ].map(([k, v]) =>
+    `<div class="stat"><div class="k">${escapeHtml(k)}</div>
+     <div class="v">${escapeHtml(v)}</div></div>`).join("");
+}
+
+function renderSources(status) {
+  const rows = (status.sources || []).map((s) => {
+    const removable = s.origin !== "curated";
+    const link = s.source_url && s.source_url.startsWith("http")
+      ? `<a href="${escapeHtml(s.source_url)}" target="_blank" rel="noopener">${escapeHtml(s.source_title)}</a>`
+      : escapeHtml(s.source_title);
+    const state = s.state !== "available"
+      ? `<div class="note state-${escapeHtml(s.state)}">${escapeHtml(s.state)}${
+           s.note ? ": " + escapeHtml(s.note.slice(0, 90)) : ""}</div>`
+      : "";
+    return `<tr>
+      <td><div class="src-title">${link}</div>${state}</td>
+      <td><span class="tag ${escapeHtml(s.origin)}">${escapeHtml(s.origin)}</span></td>
+      <td class="note">${escapeHtml(s.license)}</td>
+      <td class="num">${(s.chunk_count ?? 0).toLocaleString()}</td>
+      <td>${removable
+        ? `<button class="danger" type="button" data-remove="${escapeHtml(s.source_id)}">Remove</button>`
+        : `<span class="note" title="Shipped with the project">shipped</span>`}</td>
+    </tr>`;
+  }).join("");
+  $("sources").innerHTML = rows ||
+    `<tr><td colspan="5" class="note" style="padding:16px">No sources.
+      Run <code>python -m app.ingest.fetch_sources</code> or add one below.</td></tr>`;
+}
+
+async function refresh() {
+  try {
+    const status = await api("/admin/status");
+    renderStats(status);
+    renderSources(status);
+    $("dropTypes").textContent =
+      `${(status.supported_uploads || []).join("  ")} · up to ${status.max_upload_mb} MB`;
+    if (status.active_job && ["queued", "running"].includes(status.active_job.state)) {
+      trackJob(status.active_job.job_id);
+    }
+  } catch (error) {
+    toast("Could not load status: " + error.message, true);
+  }
+}
+
+function renderJob(job) {
+  $("jobs").style.display = "block";
+  $("jobId").textContent = job.job_id;
+  $("jobState").textContent = job.state;
+  $("jobState").className = "pill " + job.state;
+  $("jobStage").textContent = job.error ? job.error : job.stage;
+  $("jobLog").textContent = (job.log || []).join("\n");
+  $("jobLog").scrollTop = $("jobLog").scrollHeight;
+}
+
+function trackJob(jobId) {
+  clearInterval(pollTimer);
+  setBusy(true);
+  pollTimer = setInterval(async () => {
+    try {
+      const job = await api(`/admin/jobs/${jobId}`);
+      renderJob(job);
+      if (job.state === "succeeded" || job.state === "failed") {
+        clearInterval(pollTimer);
+        setBusy(false);
+        toast(job.state === "succeeded"
+          ? `Index rebuilt: ${job.result?.chunk_count ?? "?"} chunks.`
+          : `Rebuild failed: ${job.error}. The previous index is still in use.`,
+          job.state === "failed");
+        refresh();
+      }
+    } catch (error) {
+      clearInterval(pollTimer);
+      setBusy(false);
+      toast("Lost track of the job: " + error.message, true);
+    }
+  }, 1200);
+}
+
+function showPreview(preview) {
+  pendingToken = preview.preview_token;
+  $("pFormat").textContent = preview.format;
+  $("pChars").textContent = (preview.char_count || 0).toLocaleString();
+  $("pHeadings").textContent = preview.heading_count ?? 0;
+  $("pTitle").value = preview.title || "";
+  $("pLicence").value = preview.suggested_license || "";
+  $("pPublisher").value = preview.origin === "upload" ? "User supplied" : "";
+  $("pWarnings").innerHTML = (preview.warnings || [])
+    .map((w) => "⚠ " + escapeHtml(w)).join("<br>");
+  $("previewText").textContent = preview.text || "";
+  $("preview").style.display = "block";
+  $("preview").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function hidePreview() {
+  pendingToken = null;
+  $("preview").style.display = "none";
+  $("previewText").textContent = "";
+}
+
+$("fetchUrl").addEventListener("click", async () => {
+  const url = $("url").value.trim();
+  if (!url) return;
+  $("fetchUrl").disabled = true;
+  try {
+    showPreview(await api("/admin/sources/url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    }));
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    $("fetchUrl").disabled = jobRunning;
+  }
+});
+
+async function upload(file) {
+  if (!file) return;
+  const form = new FormData();
+  form.append("file", file);
+  try {
+    showPreview(await api("/admin/sources/upload", { method: "POST", body: form }));
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+$("drop").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", (event) => upload(event.target.files[0]));
+["dragenter", "dragover"].forEach((name) =>
+  $("drop").addEventListener(name, (event) => {
+    event.preventDefault(); $("drop").classList.add("over");
+  }));
+["dragleave", "drop"].forEach((name) =>
+  $("drop").addEventListener(name, (event) => {
+    event.preventDefault(); $("drop").classList.remove("over");
+  }));
+$("drop").addEventListener("drop", (event) => upload(event.dataTransfer.files[0]));
+
+$("confirm").addEventListener("click", async () => {
+  if (!pendingToken) return;
+  $("confirm").disabled = true;
+  try {
+    const result = await api("/admin/sources/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        preview_token: pendingToken,
+        title: $("pTitle").value.trim() || null,
+        license: $("pLicence").value.trim() || null,
+        publisher: $("pPublisher").value.trim() || null,
+      }),
+    });
+    hidePreview();
+    $("url").value = "";
+    toast(`Added ${result.source_id}. Rebuilding the index…`);
+    if (result.job) trackJob(result.job.job_id);
+    refresh();
+  } catch (error) {
+    toast(error.message, true);
+    $("confirm").disabled = false;
+  }
+});
+
+$("discard").addEventListener("click", () => { hidePreview(); $("url").value = ""; });
+
+$("rebuild").addEventListener("click", async () => {
+  try {
+    const job = await api("/admin/rebuild", { method: "POST" });
+    toast("Rebuild started.");
+    trackJob(job.job_id);
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+$("sources").addEventListener("click", async (event) => {
+  const sourceId = event.target.dataset?.remove;
+  if (!sourceId) return;
+  if (!confirm(`Remove "${sourceId}"?\n\nIts document, registry entry and `
+    + `chunks are all deleted, and the index is rebuilt.`)) return;
+  try {
+    const result = await api(`/admin/sources/${encodeURIComponent(sourceId)}`,
+                             { method: "DELETE" });
+    toast(result.note || `Removed ${result.removed}. Rebuilding…`);
+    if (result.job) trackJob(result.job.job_id);
+    refresh();
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+refresh();
+</script>
+</body>
+</html>
