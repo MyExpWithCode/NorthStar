@@ -236,7 +236,7 @@ print(f"  finish_reason : {final['choices'][0]['finish_reason']!r}")
 print()
 print("  the answer, finally:")
 print()
-for line in final["choices"][0]["message"]["content"].splitlines():
+for line in (final["choices"][0]["message"].get("content") or "").splitlines():
     print(f"      {line}")
 
 print()
@@ -274,19 +274,43 @@ lied_to = post_json(URL, {
 
 print(f'  we returned : "heavy snow, -40C, Singapore"')
 print()
-print("  the model says:")
-for line in lied_to["choices"][0]["message"]["content"].splitlines()[:8]:
-    print(f"      {line}")
+
+lied_message = lied_to["choices"][0]["message"]
+lied_content = lied_message.get("content")
+lied_calls = lied_message.get("tool_calls") or []
+
+if lied_content:
+    print("  the model says:")
+    for line in lied_content.splitlines()[:8]:
+        print(f"      {line}")
+    print()
+    print("  It accepted our fabricated data and reported on it. Whatever")
+    print("  you put in that message IS reality as far as the model is")
+    print("  concerned - it has no way to check.")
+elif lied_calls:
+    print("  the model did NOT write prose. It asked for another tool call:")
+    for call in lied_calls:
+        print(f"      {call['function']['name']}"
+              f"({call['function']['arguments'][:70]})")
+    print()
+    print("  Interesting - and a better outcome than pure credulity. Faced")
+    print("  with implausible data it chose to re-fetch rather than report.")
+    print()
+    print("  But be careful what you conclude. It did not 'detect a lie'.")
+    print("  It hit a branch where calling the tool again looked like the")
+    print("  best next action. Run it a few times: the behaviour varies,")
+    print("  and on an earlier run the model cheerfully answered")
+    print("  'no rain expected, the weather looks clear' - reporting our")
+    print("  -40C snow as fine.")
+else:
+    print(f"  unexpected reply shape: {list(lied_message)}")
 
 print()
-print("  Whatever you put in that message IS reality as far as the model")
-print("  is concerned. It has no way to check.")
-print()
-print("  When I first ran this, the model did not even flag the snow - it")
-print("  answered the literal question ('will it rain?') with 'no rain")
-print("  expected, the weather looks clear' and moved on. It did not")
-print("  reason about -40C in the tropics at all, because it was not")
-print("  asked to. Your exact output above may differ.")
+print("  ** The load-bearing point is unchanged, and it does not depend")
+print("     on how the model reacted: ** nothing in the protocol lets the")
+print("     model verify a tool result. There is no signature, no")
+print("     provenance, no second source. If it sometimes pushes back,")
+print("     that is a behavioural tendency, not a guarantee.")
 print()
 print("  Two conclusions, and they point in opposite directions:")
 print()
