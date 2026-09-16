@@ -24,9 +24,10 @@ from langchain.agents.middleware import (
     ContextEditingMiddleware,
 )
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.tracers.context import collect_runs
 from langgraph.checkpoint.memory import InMemorySaver
 
-from app import llm, mcp_client, prompts
+from app import llm, mcp_client, observability, prompts
 from app.config import settings
 from app.mcp_client import McpToolset, parse_tool_payload
 from app.rag import retriever
@@ -62,6 +63,7 @@ class TravelAgent:
                 **self.toolset.tools_by_server,
             },
             "degraded_tools": self.toolset.degraded_summary(),
+            "tracing": observability.describe(),
         }
 
 
@@ -127,9 +129,16 @@ class Provenance:
 
     kb_sources: list[dict] = field(default_factory=list)
     tool_calls: list[dict] = field(default_factory=list)
+    #: LangSmith URL for this turn's run, when tracing is on. Lets a reviewer
+    #: inspect the whole agent loop rather than taking the panels on trust.
+    trace_url: str | None = None
 
     def as_dict(self) -> dict:
-        return {"kb_sources": self.kb_sources, "tool_calls": self.tool_calls}
+        return {
+            "kb_sources": self.kb_sources,
+            "tool_calls": self.tool_calls,
+            "trace_url": self.trace_url,
+        }
 
 
 def _tool_call_arguments(messages: list, tool_call_id: str) -> dict:
@@ -287,10 +296,15 @@ async def ask(
 ) -> tuple[str, Provenance]:
     """Run one turn. Returns the answer markdown and its provenance."""
     config = {"configurable": {"thread_id": session_id}}
+    traced_run = None
     try:
-        result = await agent.graph.ainvoke(
-            {"messages": [HumanMessage(content=question)]}, config=config
-        )
+        # collect_runs captures the root run so the answer can carry a link to
+        # its own trace. It is a no-op when tracing is off.
+        with collect_runs() as collected:
+            result = await agent.graph.ainvoke(
+                {"messages": [HumanMessage(content=question)]}, config=config
+            )
+        traced_run = collected.traced_runs[0] if collected.traced_runs else None
     except Exception as exc:
         # A chat turn must not die on a provider-side error. Report what
         # happened; never dress a failure up as an answer.
@@ -303,6 +317,7 @@ async def ask(
     # called in earlier turns.
     turn_messages = _messages_since_last_human(messages)
     provenance = extract_provenance(turn_messages, agent.toolset)
+    provenance.trace_url = observability.run_url(traced_run)
 
     final = next(
         (m for m in reversed(messages) if isinstance(m, AIMessage) and _answer_text(m)),

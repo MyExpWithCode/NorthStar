@@ -62,6 +62,16 @@ class Settings(BaseSettings):
     chunk_size: int = Field(default=900, ge=200)
     chunk_overlap: int = Field(default=120, ge=0)
 
+    # -- Observability (LangSmith) ------------------------------------------
+    #: When on, every agent run is traced to LangSmith: the tool calls, their
+    #: arguments and results, and the prompts. That is genuinely useful here
+    #: because the interesting question about this app is never "what did it
+    #: say" but "which tools did it choose and what did they return".
+    langsmith_tracing: bool = False
+    langsmith_api_key: SecretStr | None = None
+    langsmith_project: str = "northstar"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+
     # -- Conversation context -----------------------------------------------
     #: Token count above which older tool results are cleared from the
     #: conversation history.
@@ -129,6 +139,14 @@ class Settings(BaseSettings):
         return self.max_upload_mb * 1024 * 1024
 
     # -- LLM credentials ----------------------------------------------------
+    @property
+    def langsmith_enabled(self) -> bool:
+        """Tracing needs both the switch and a key; neither alone is enough."""
+        key = self.langsmith_api_key
+        return bool(
+            self.langsmith_tracing and key and key.get_secret_value().strip()
+        )
+
     @property
     def llm_api_key_env(self) -> str:
         """Name of the env var the active provider needs, for error messages."""

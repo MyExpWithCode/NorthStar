@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app import agent as agent_module
-from app import llm, mcp_client
+from app import llm, mcp_client, observability
 from app.config import dotenv_keys_shadowed_by_environment, settings
 from app.ingest.registry import SourceRegistry
 from app.ingest.service import IngestionError, service as ingestion
@@ -41,6 +41,15 @@ async def lifespan(app: FastAPI):
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
+
+    tracing = observability.configure()
+    if tracing["enabled"]:
+        logger.info(
+            "LangSmith tracing on, project %r -- every turn is traced",
+            tracing["project"],
+        )
+    else:
+        logger.info("LangSmith tracing off: %s", tracing["reason"])
 
     shadowed = dotenv_keys_shadowed_by_environment()
     if shadowed:
@@ -98,6 +107,7 @@ class ChatResponse(BaseModel):
     kb_sources: list[dict]
     tool_calls: list[dict]
     degraded_tools: list[dict]
+    trace_url: str | None = None
 
 
 class ResetRequest(BaseModel):
@@ -148,6 +158,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         kb_sources=provenance.kb_sources,
         tool_calls=provenance.tool_calls,
         degraded_tools=travel_agent.toolset.degraded_summary(),
+        trace_url=provenance.trace_url,
     )
 
 
@@ -179,6 +190,7 @@ async def health() -> dict:
             dotenv_keys_shadowed_by_environment()
         ),
         "llm": llm.describe(),
+        "tracing": observability.describe(),
         "knowledge_base": {
             "ready": index["ready"],
             "destinations": index["destinations"],
@@ -304,14 +316,20 @@ async def unhandled_error_handler(request: Request, exc: Exception):
 # ---------------------------------------------------------------------------
 # Static pages (mounted last so they cannot shadow the API routes)
 # ---------------------------------------------------------------------------
+#: The pages are edited during development and served from disk, so a cached
+#: copy shows stale markup against a freshly restarted backend -- which looks
+#: exactly like a broken deployment. They are small; do not cache them.
+_NO_CACHE = {"Cache-Control": "no-store, must-revalidate"}
+
+
 @app.get("/")
 async def chat_page() -> FileResponse:
-    return FileResponse(settings.static_dir / "index.html")
+    return FileResponse(settings.static_dir / "index.html", headers=_NO_CACHE)
 
 
 @app.get("/admin")
 async def admin_page() -> FileResponse:
-    return FileResponse(settings.static_dir / "admin.html")
+    return FileResponse(settings.static_dir / "admin.html", headers=_NO_CACHE)
 
 
 app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")

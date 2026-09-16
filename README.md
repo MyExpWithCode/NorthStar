@@ -100,6 +100,26 @@ prefix, exactly as `qwen/qwen3.8-27b` is listed under Alibaba Cloud. Groq's endp
 
 Set `LLM_PROVIDER=anthropic` with `ANTHROPIC_API_KEY` to use Claude instead.
 
+## Observability (LangSmith)
+
+Every agent run can be traced to LangSmith, and each answer in the UI carries an
+**"Inspect this run in LangSmith"** link. That is worth having because the interesting question about
+this app is never "what did it say" but **"which tools did it choose, what did they return, and does the
+answer follow from that"** — a trace shows the whole loop: each tool call with its arguments and result,
+the prompts as sent, and token counts.
+
+```
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=ls__...
+LANGSMITH_PROJECT=northstar
+```
+
+Both the switch and a key are required; the switch alone does nothing. `GET /health` reports
+`tracing.enabled` and the project, and the header meter shows it, so you can tell at a glance whether a
+run was captured. LangChain reads this configuration from the process environment rather than from our
+settings object, so the app copies the values across at startup — otherwise putting keys in `.env` would
+silently not enable tracing.
+
 ## Destinations
 
 The knowledge base holds a **destination per document**, and retrieval is scoped to it. This matters for
