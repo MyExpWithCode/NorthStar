@@ -19,7 +19,7 @@ Design is fixed first in [ARCHITECTURE.md](ARCHITECTURE.md); code follows it.
 | T9 | LLM factory | ✅ done — resolved openai/gpt-oss-120b, tool calls verified |
 | T10 | Prompt engineering | ✅ done — `app/prompts.py`, [PROMPT_STRATEGY.md](PROMPT_STRATEGY.md) |
 | T11 | Agent assembly | ✅ done — all 6 tool-selection scenarios + multi-turn verified |
-| T12 | Document parsers — md/txt/html/pdf/docx | ⬜ |
+| T12 | Document parsers — md/txt/html/pdf/docx | ✅ done — 5 formats + 5 rejection paths |
 | T13 | Ingestion service + job runner | ⬜ |
 | T14 | FastAPI backend — chat + admin routes | ⬜ |
 | T15 | Chat UI | ⬜ |
