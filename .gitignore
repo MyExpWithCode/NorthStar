@@ -34,3 +34,4 @@ desktop.ini
 
 # Conversation history (SQLite; local runtime state)
 data/conversations.sqlite3*
+learn/_scratch/
