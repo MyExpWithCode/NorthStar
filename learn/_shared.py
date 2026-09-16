@@ -18,10 +18,14 @@ from pathlib import Path
 # no-break spaces, em-dashes and emoji. Without this, printing a model's
 # own answer crashes with UnicodeEncodeError - which is a silly way to
 # lose a lesson.
+# line_buffering=True matters too: without it, redirecting a lesson's
+# output to a file shows nothing until the process exits, which makes a
+# slow lesson look hung.
 for stream in (sys.stdout, sys.stderr):
     try:
-        stream.reconfigure(encoding="utf-8", errors="replace")
-    except (AttributeError, OSError):
+        stream.reconfigure(encoding="utf-8", errors="replace",
+                           line_buffering=True)
+    except (AttributeError, OSError, ValueError):
         pass
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,8 +72,12 @@ def groq_key() -> str:
     return key
 
 
-def post_json(url: str, payload: dict, key: str, timeout: float = 90.0) -> dict:
-    """One HTTP POST. No SDK, no retries, no streaming. 8 lines."""
+def post_json_once(url: str, payload: dict, key: str,
+                   timeout: float = 90.0) -> dict:
+    """One HTTP POST. No SDK, no retries, no streaming. 8 lines.
+
+    This is the honest minimum, and it is what lesson 07 shows you.
+    """
     request = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -82,6 +90,39 @@ def post_json(url: str, payload: dict, key: str, timeout: float = 90.0) -> dict:
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read())
+
+
+def post_json(url: str, payload: dict, key: str, timeout: float = 90.0,
+              max_retries: int = 5) -> dict:
+    """post_json_once, plus retry-on-429.
+
+    Added after writing lesson 08, because Groq's free tier meters tokens
+    per minute and a lesson that makes a dozen calls reliably hits HTTP
+    429 partway through and dies with a traceback.
+
+    That is exactly the incident behind `max_retries=5` in app/llm.py,
+    and behind EXCERPT_CHAR_LIMIT and MAX_RETRIEVAL_K in the retrieval
+    code. The comments in those files are not hypothetical - writing
+    these lessons reproduced the failure they describe.
+
+    Honest backoff: respect Retry-After when the server sends it,
+    otherwise exponential.
+    """
+    import time
+
+    delay = 2.0
+    for attempt in range(max_retries):
+        try:
+            return post_json_once(url, payload, key, timeout)
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (429, 500, 502, 503) or attempt == max_retries - 1:
+                raise
+            wait = float(exc.headers.get("Retry-After") or 0) or delay
+            print(f"    [HTTP {exc.code}; waiting {wait:.0f}s, "
+                  f"retry {attempt + 1}/{max_retries - 1}]")
+            time.sleep(wait)
+            delay = min(delay * 2, 30.0)
+    raise RuntimeError("unreachable")
 
 
 def get_json(url: str, key: str, timeout: float = 30.0) -> dict:

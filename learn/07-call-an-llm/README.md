@@ -5,6 +5,14 @@
 
 **This lesson needs `GROQ_API_KEY` in `.env`.**
 
+> **Rate limits.** This lesson makes several model calls. Groq's free tier
+> meters tokens per minute, so on a fresh budget it runs in ~20 s, and on an
+> exhausted one you will see lines like
+> `[HTTP 429; waiting 51s, retry 1/4]` while it backs off and retries rather
+> than dying. That is the same failure `max_retries=5` in
+> [app/llm.py](../../app/llm.py) exists for.
+
+
 ## The whole thing is one HTTP POST
 
 ```
