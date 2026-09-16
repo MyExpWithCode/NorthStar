@@ -1,10 +1,19 @@
 # NorthStar
 
-> **Branch note.** This is `feat/multi-destination`. The knowledge base is
-> **per-destination**: retrieval is scoped to the place a question is about, and
-> a question about a place with no documents is refused with the covered list
-> named, rather than answered from another place's guide. `main` holds the
-> Singapore-only version.
+> **Branch note.** This is `learn/basics`, branched from
+> `feat/multi-destination`. It adds a **[`learn/`](learn/) folder** and changes
+> nothing else: fourteen numbered, independently-runnable lessons that rebuild
+> each layer of this app in plain Python before showing the library call that
+> replaces it, plus [`learn/13-mini-app/mini.py`](learn/13-mini-app/mini.py) —
+> the whole assistant in one file using three dependencies instead of nineteen.
+>
+> Start at **[learn/README.md](learn/README.md)**. Nothing in `learn/` is
+> imported by `app/`; delete the folder and NorthStar still works.
+>
+> The knowledge base is **per-destination**: retrieval is scoped to the place a
+> question is about, and a question about a place with no documents is refused
+> with the covered list named, rather than answered from another place's guide.
+> `main` holds the Singapore-only version.
 
 A context-aware travel assistant that combines a **document-based RAG knowledge base** for stable
 destination knowledge with **MCP tools** for live weather and currency information, and blends both in a

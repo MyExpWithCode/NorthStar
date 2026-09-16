@@ -499,7 +499,21 @@ def convert_currency(amount: float, from_currency: str,
 
 
 # --- the KB tool, with both sentinels (lesson 06) --------------------
-def make_kb_tool(kb: KnowledgeBase):
+def make_kb_tool(kb: KnowledgeBase, marker_counter: list[int]):
+    """`marker_counter` is a one-element list the Agent resets each turn.
+
+    Why it exists: markers must be CONTINUOUS ACROSS A TURN. If each call
+    numbers its own excerpts from S1, then a turn with two searches - which
+    the flagship scenario always does - emits two [S1]s, two [S2]s, and the
+    model's citation is ambiguous.
+
+    The real app/rag/kb_tool.py has this bug: line 225 builds
+    `["S" + str(i) for i in range(1, len(hits) + 1)]` per CALL, and
+    app/agent.py's extract_provenance dedups by chunk_id without
+    renumbering. Found by running this file's flagship scenario and
+    noticing two S1-S5 blocks in one provenance list. See lesson 08.
+    """
+
     def search_travel_knowledge_base(
         query: str, destination: str = "", categories: list | None = None,
         k: int = RETRIEVAL_K,
@@ -543,8 +557,9 @@ def make_kb_tool(kb: KnowledgeBase):
             }
 
         excerpts, sources = [], []
-        for i, hit in enumerate(hits, 1):
-            marker = f"S{i}"
+        for hit in hits:
+            marker_counter[0] += 1
+            marker = f"S{marker_counter[0]}"
             body = hit["text"]
             if body.startswith(hit["section_path"]):
                 body = body[len(hit["section_path"]):].strip()
@@ -687,8 +702,19 @@ def call_model(messages: list[dict], tools: list[dict],
 
 def resolve_model() -> str:
     """Pick a tool-calling model from the LIVE catalogue (lesson 07).
+
     Groq retires models often enough that a hardcoded id is a time bomb.
+
+    LEARN_MODEL in .env overrides. Groq's daily token limit is PER MODEL
+    (200,000 each), so when one is exhausted another has a full budget.
     """
+    import os
+
+    override = (os.environ.get("LEARN_MODEL")
+                or ENV.get("LEARN_MODEL") or "").strip()
+    if override:
+        return override
+
     preferred = ("openai/gpt-oss-120b", "qwen/qwen3.8-27b",
                  "openai/gpt-oss-20b")
     not_chat = ("whisper", "orpheus", "guard", "tts", "embed", "safeguard")
@@ -767,8 +793,13 @@ class Agent:
 
     def __init__(self, kb: KnowledgeBase) -> None:
         self.kb = kb
+        # Citation markers run continuously across one turn, then reset.
+        # See make_kb_tool's docstring for the bug this avoids.
+        self._marker_counter = [0]
         self.registry = {
-            "search_travel_knowledge_base": make_kb_tool(kb),
+            "search_travel_knowledge_base": make_kb_tool(
+                kb, self._marker_counter
+            ),
             "get_weather_forecast": get_weather_forecast,
             "convert_currency": convert_currency,
         }
@@ -788,6 +819,7 @@ class Agent:
         )
         messages.append({"role": "user", "content": question})
 
+        self._marker_counter[0] = 0      # markers restart each turn
         sources: list[dict] = []
         tool_calls: list[dict] = []
         seen_chunks: set[str] = set()

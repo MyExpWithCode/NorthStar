@@ -163,6 +163,35 @@ It also saves tokens: the source URL is deliberately *not* sent to the model,
 because it would cost tokens on every call of the loop and the UI already has
 it.
 
+### A bug this lesson's reasoning uncovered
+
+Running lesson 13's flagship scenario printed a provenance list containing
+**two** `[S1]`s, two `[S2]`s, and so on. The cause is in
+[app/rag/kb_tool.py:225](../../app/rag/kb_tool.py#L225):
+
+```python
+markers = ["S" + str(i) for i in range(1, len(hits) + 1)]
+```
+
+Markers are numbered **per tool call**, starting from `S1` every time. And
+`extract_provenance` in [app/agent.py](../../app/agent.py) deduplicates sources
+by `chunk_id` but never renumbers them.
+
+So any turn that searches the knowledge base twice — which the flagship
+scenario *always* does, once for the itinerary and once for `indoor`
+alternatives — produces two different sources both labelled `[S1]`. The model's
+citation is genuinely ambiguous, and the UI shows duplicate markers.
+
+The fix is small: number markers continuously across a turn rather than per
+call. `mini.py` does this with a counter the agent resets each turn — see
+`make_kb_tool`'s docstring there.
+
+It is worth noticing *how* this surfaced. The provenance mechanism is sound —
+citations still cannot be fabricated, because they come from the artifact. What
+broke is that the *identifier* is not unique across a turn. Guarantees about
+where data came from do not automatically give you guarantees about how it is
+labelled.
+
 ## A real production scar worth reading
 
 From `kb_tool.py`:

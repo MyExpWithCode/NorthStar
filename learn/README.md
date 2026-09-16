@@ -29,6 +29,41 @@ embedding model already downloaded into `.cache/fastembed`. No extra installs.
 Nothing is written outside `learn/` except a scratch folder,
 `learn/_scratch/`, which is gitignored.
 
+## Rate limits, realistically
+
+Lessons 00–06, 09, 11 and 12 need no API key at all. Lessons 07, 08, 10 and 13
+call Groq, and Groq's free tier is tighter than it looks. Measured while
+writing these lessons, from the response headers:
+
+```
+  x-ratelimit-limit-tokens = 8000        per MINUTE
+  tokens per day (TPD)     = 200000      per model
+```
+
+Two things follow, and both are worth knowing before you blame your code:
+
+**1. The per-minute limit is the one the real app is designed around.** A RAG
+turn sends 5 excerpts × 520 characters per search, several searches deep, and
+re-sends all of it on every loop iteration. That is how the flagship scenario
+approaches 8,000 tokens/minute *within a single turn* — which is exactly why
+`app/config.py` sets `context_trim_trigger_tokens=4000`, why
+`MAX_RETRIEVAL_K=5` is a hard ceiling, and why `EXCERPT_CHAR_LIMIT=520` exists.
+Those comments say "observed"; they are accurate.
+
+**2. The daily limit is per model, so you can switch.** When
+`openai/gpt-oss-120b` is exhausted, `openai/gpt-oss-20b` still has a full
+200,000:
+
+```bash
+LEARN_MODEL=openai/gpt-oss-20b .venv/Scripts/python.exe learn/13-mini-app/mini.py
+```
+
+Every key-using lesson honours `LEARN_MODEL`, from the shell or from `.env`.
+
+When a limit is hit you will see `[HTTP 429; waiting 51s, retry 1/4]` — the
+scripts back off and retry rather than dying, which is the same behaviour
+`max_retries=5` gives the real app.
+
 ## The order
 
 Read them in order. Each one assumes the one before it.
@@ -50,9 +85,15 @@ Read them in order. Each one assumes the one before it.
 | 12 | [Serving](12-serving/) | What does FastAPI add over `http.server`? | no |
 | 13 | [The mini app](13-mini-app/) | All of it, one file, zero LangChain | **yes** |
 
-Then: **[ALTERNATIVES.md](ALTERNATIVES.md)** — every technology choice in
-NorthStar, what else exists, and when you would pick differently.
-And **[GLOSSARY.md](GLOSSARY.md)** — the jargon, in one line each.
+Then three reference documents:
+
+- **[ALTERNATIVES.md](ALTERNATIVES.md)** — every technology choice in NorthStar,
+  what else exists, and when you would pick differently. One table per decision,
+  with a verdict citing the lesson that measured it.
+- **[FINDINGS.md](FINDINGS.md)** — the eight things measuring the app turned up,
+  most-actionable first, each with a reproduction and the file to change.
+- **[GLOSSARY.md](GLOSSARY.md)** — ~120 terms, one line each, in the meaning
+  they have in this project.
 
 ## The one-paragraph version
 

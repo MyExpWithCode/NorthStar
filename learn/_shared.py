@@ -152,7 +152,20 @@ def resolve_model(key: str) -> str:
     models often enough that a hardcoded id is a time bomb. At the time of
     writing its catalogue holds 13 models and none of the `llama-3.3-*`
     ids most tutorials still name.
+
+    Set LEARN_MODEL to override. Useful because Groq's daily token limit
+    is PER MODEL - 200,000 tokens/day each - so when gpt-oss-120b is
+    exhausted, gpt-oss-20b still has a full budget:
+
+        LEARN_MODEL=openai/gpt-oss-20b python learn/08-tool-calling/run.py
     """
+    import os
+
+    override = (os.environ.get("LEARN_MODEL")
+                or parse_dotenv().get("LEARN_MODEL") or "").strip()
+    if override:
+        return override
+
     available = {
         m["id"] for m in get_json(f"{GROQ_BASE}/models", key).get("data", [])
     }
