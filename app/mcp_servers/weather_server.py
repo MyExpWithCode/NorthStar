@@ -26,7 +26,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
-from mcp.server.mcpserver import MCPServer
+from mcp.server.fastmcp import FastMCP
 
 # httpx logs every request at INFO. On a stdio server that noise lands in the
 # client's captured stderr and buries anything worth reading.
@@ -87,7 +87,12 @@ WMO_CODES: dict[int, str] = {
     99: "thunderstorm with heavy hail",
 }
 
-server = MCPServer(
+# NOTE ON THE SDK VERSION
+# mcp 2.x renamed FastMCP to MCPServer, but langchain-mcp-adapters (the client
+# side of this integration) requires mcp<2. Server and client have to agree, so
+# this targets the 1.x API. The decorator and constructor signatures are
+# identical across both, so only the import differs.
+server = FastMCP(
     name=SERVER_NAME,
     instructions=(
         "Current weather conditions and daily forecasts for travel planning. "

@@ -23,6 +23,11 @@ langchain-community==0.4.2
 
 # T5 - retriever + KB tool (langchain-core arrived with T3)
 
-# T6/T7 - MCP servers (weather via Open-Meteo, currency via Frankfurter)
-mcp[cli]==2.2.0
+# T6/T7 - MCP servers (weather via Open-Meteo, currency via Frankfurter).
+# Pinned to mcp 1.x: langchain-mcp-adapters (T8) requires mcp<2, and the client
+# and server sides have to agree on the SDK major version.
+mcp[cli]==1.30.0
 httpx==0.28.1
+
+# T8 - MCP client, bridging MCP tools into LangChain
+langchain-mcp-adapters==0.3.2

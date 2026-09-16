@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import httpx
-from mcp.server.mcpserver import MCPServer
+from mcp.server.fastmcp import FastMCP
 
 # httpx logs every request at INFO; on a stdio server that buries the useful
 # content of the client's captured stderr.
@@ -40,7 +40,12 @@ SOURCE = "Frankfurter (European Central Bank reference rates)"
 BASE_URL = "https://api.frankfurter.dev/v1"
 REQUEST_TIMEOUT = 20.0
 
-server = MCPServer(
+# NOTE ON THE SDK VERSION
+# mcp 2.x renamed FastMCP to MCPServer, but langchain-mcp-adapters (the client
+# side of this integration) requires mcp<2. Server and client have to agree, so
+# this targets the 1.x API. The decorator and constructor signatures are
+# identical across both, so only the import differs.
+server = FastMCP(
     name=SERVER_NAME,
     instructions=(
         "Currency conversion and exchange rates from European Central Bank "

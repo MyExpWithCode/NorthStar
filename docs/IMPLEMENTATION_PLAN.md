@@ -15,7 +15,7 @@ Design is fixed first in [ARCHITECTURE.md](ARCHITECTURE.md); code follows it.
 | T5 | Retriever + grounding guard + index reload | ✅ done — `scripts/smoke_rag.py` all green |
 | T6 | MCP server 1 — weather | ✅ done — 2 tools, stdio verified |
 | T7 | MCP server 2 — currency | ✅ done — 2 tools, stdio verified |
-| T8 | MCP client wiring | ⬜ |
+| T8 | MCP client wiring | ✅ done — 4 tools, per-server degradation |
 | T9 | LLM factory | ⬜ |
 | T10 | Prompt engineering | ⬜ |
 | T11 | Agent assembly | ⬜ |
