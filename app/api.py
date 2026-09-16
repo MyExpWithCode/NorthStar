@@ -76,8 +76,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI Travel Planning Assistant",
     description=(
-        "Singapore travel assistant combining a RAG knowledge base with live "
-        "information from MCP tools."
+        "Travel assistant combining a per-destination RAG knowledge base with "
+        "live information from MCP tools."
     ),
     version="0.1.0",
     lifespan=lifespan,
@@ -111,6 +111,7 @@ class UrlRequest(BaseModel):
 class ConfirmRequest(BaseModel):
     preview_token: str = Field(min_length=1, max_length=64)
     title: str | None = Field(default=None, max_length=300)
+    destination: str | None = Field(default=None, max_length=120)
     license: str | None = Field(default=None, max_length=200)
     publisher: str | None = Field(default=None, max_length=200)
     source_url: str | None = Field(default=None, max_length=2000)
@@ -180,6 +181,7 @@ async def health() -> dict:
         "llm": llm.describe(),
         "knowledge_base": {
             "ready": index["ready"],
+            "destinations": index["destinations"],
             "loaded": index["loaded"],
             "relevance_floor": index["relevance_floor"],
             "retrieval_k": index["retrieval_k"],
@@ -193,6 +195,21 @@ async def health() -> dict:
             "expected_servers": sorted(mcp_client.SERVER_MODULES),
         },
         "agent": _agent.describe() if _agent else None,
+    }
+
+
+@app.get("/destinations")
+async def destinations() -> dict:
+    """Which places the knowledge base can actually answer about.
+
+    The chat page reads this to build its example prompts, so the UI never
+    suggests a destination the index cannot support.
+    """
+    summaries = retriever.destinations()
+    return {
+        "destinations": [s.model_dump() for s in summaries],
+        "names": [s.destination for s in summaries],
+        "default": settings.destination,
     }
 
 
@@ -232,6 +249,7 @@ async def admin_confirm(request: ConfirmRequest) -> dict:
     return ingestion.confirm(
         request.preview_token,
         title=request.title,
+        destination=request.destination,
         license_=request.license,
         publisher=request.publisher,
         source_url=request.source_url,
@@ -241,6 +259,12 @@ async def admin_confirm(request: ConfirmRequest) -> dict:
 @app.delete("/admin/sources/{source_id}")
 async def admin_remove(source_id: str) -> dict:
     return ingestion.remove_source(source_id)
+
+
+@app.delete("/admin/destinations/{destination}")
+async def admin_remove_destination(destination: str) -> dict:
+    """Remove every document for one place, then rebuild."""
+    return ingestion.remove_destination(destination)
 
 
 @app.post("/admin/rebuild")

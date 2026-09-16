@@ -1,4 +1,10 @@
-# AI Travel Planning Assistant — Singapore
+# AI Travel Planning Assistant
+
+> **Branch note.** This is `feat/multi-destination`. The knowledge base is
+> **per-destination**: retrieval is scoped to the place a question is about, and
+> a question about a place with no documents is refused with the covered list
+> named, rather than answered from another place's guide. `main` holds the
+> Singapore-only version.
 
 A context-aware travel assistant that combines a **document-based RAG knowledge base** for stable
 destination knowledge with **MCP tools** for live weather and currency information, and blends both in a
@@ -77,10 +83,45 @@ Boundaries worth knowing:
 
 ---
 
+## Destinations
+
+The knowledge base holds a **destination per document**, and retrieval is scoped to it. This matters for
+honesty rather than tidiness: without scoping, "what should I see in Rome?" would retrieve Singapore
+chunks and be answered confidently from the wrong city.
+
+Shipped: **Singapore** (17 documents) and **Kyoto** (6 documents). Kyoto is there to demonstrate that the
+pipeline is genuinely generic -- it was added with one command and no code change.
+
+```powershell
+# discover and fetch a destination's Wikivoyage guide and district pages
+python -m app.ingest.fetch_sources --add-destination Tokyo
+python -m app.ingest.fetch_sources --add-destination Tokyo --discover-only   # dry run
+python -m app.ingest.build_index
+```
+
+Discovery uses the MediaWiki API: Wikivoyage names district guides as subpages (`Tokyo/Shinjuku`), so the
+whole set for a city is found rather than hand-listed, with redirects skipped. A name with no Wikivoyage
+article fails with a clear message instead of producing an empty destination.
+
+Behaviour, verified in `scripts/smoke_rag.py`:
+
+| Question about | Result |
+|---|---|
+| A covered place | scoped to that place; every citation is from it |
+| An uncovered place | `DESTINATION_NOT_COVERED` -- refused, with the covered list named |
+| No place given | searches all destinations; each excerpt is labelled with its place |
+
+**Weather and currency are unaffected** -- they are live tools and work for any city. So the assistant can
+tell you tomorrow's forecast in Reykjavik while saying plainly that it has no travel guide for it. The
+prompt requires it to be explicit about which half it can help with.
+
+To remove a destination: the `/admin` page has a "Remove all" button per destination, or
+`DELETE /admin/destinations/{name}`.
+
 ## Knowledge-base sources
 
-17 documents, ~553,000 characters, 926 chunks. All committed to `data/kb/`, so a fresh clone can build the
-index without network access to the sources.
+23 documents, ~750,000 characters, 1,271 chunks across two destinations. All committed to `data/kb/`, so a
+fresh clone can build the index without network access to the sources.
 
 | Source | Docs | Licence | Covers |
 |---|---|---|---|
@@ -91,6 +132,7 @@ index without network access to the sources.
 | [Wikipedia: Tourism in Singapore](https://en.wikipedia.org/wiki/Tourism_in_Singapore) | 1 | CC BY-SA 4.0 | attractions, landmarks |
 | [Wikipedia: Culture of Singapore](https://en.wikipedia.org/wiki/Culture_of_Singapore) | 1 | CC BY-SA 4.0 | cultural guidance |
 | Visit Singapore (3 pages) | **0** | restrictive | **attempted, unavailable — see below** |
+| [Wikivoyage: Kyoto](https://en.wikivoyage.org/wiki/Kyoto) + 5 district guides | 6 | CC BY-SA 4.0 | second destination, added with `--add-destination` |
 
 `data/kb/sources.json` is the authority on what is in the knowledge base: id, title, URL, publisher,
 licence, origin, retrieval date and chunk count for each document.

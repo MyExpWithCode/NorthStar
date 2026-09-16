@@ -211,6 +211,13 @@ served from real uvicorn; inline JavaScript checked with `node --check`.
 
 Things not required but built because the brief's spirit demanded them:
 
+- **A per-destination knowledge base** (branch `feat/multi-destination`). The brief asks for one
+  destination, but scoping retrieval by place is what stops "what should I see in Rome?" being answered
+  out of Singapore's guide. A question about an uncovered place is refused with the covered list named,
+  and adding a destination is one command with no code change. Verified end to end: asked about Kyoto the
+  agent passes `destination: "Kyoto"` and every citation is Kyoto; asked about Reykjavik it refuses, names
+  Singapore and Kyoto, and offers the live tools that do work anywhere.
+
 - **An ingestion UI**, so the RAG pipeline is inspectable rather than hidden behind scripts. A reviewer can
   upload their own document and watch it become citable in chat.
 - **Atomic index swap.** A rebuild builds into a temp directory and swaps on success only, so chat keeps

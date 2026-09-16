@@ -29,6 +29,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from app import llm, mcp_client, prompts
 from app.config import settings
 from app.mcp_client import McpToolset, parse_tool_payload
+from app.rag import retriever
 from app.rag.kb_tool import search_travel_knowledge_base
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ class TravelAgent:
     toolset: McpToolset
     checkpointer: InMemorySaver
     model_name: str
+    destinations: list[str] = field(default_factory=list)
     kb_tool_available: bool = True
 
     @property
@@ -53,6 +55,7 @@ class TravelAgent:
     def describe(self) -> dict:
         return {
             "model": self.model_name,
+            "destinations": self.destinations,
             "tools": self.tool_names,
             "tools_by_server": {
                 "knowledge_base": [KB_TOOL_NAME],
@@ -70,6 +73,9 @@ async def build_agent() -> TravelAgent:
     """
     toolset = await mcp_client.connect()
     logger.info("MCP tools:\n%s", mcp_client.describe(toolset))
+
+    covered = retriever.destination_names()
+    logger.info("Knowledge base covers: %s", covered or "(nothing)")
 
     model = llm.get_chat_model()
     tools = [search_travel_knowledge_base, *toolset.tools]
@@ -97,7 +103,9 @@ async def build_agent() -> TravelAgent:
     graph = create_agent(
         model,
         tools=tools,
-        system_prompt=prompts.system_prompt(toolset.prompt_note()),
+        system_prompt=prompts.system_prompt(
+            toolset.prompt_note(), destinations=covered
+        ),
         checkpointer=checkpointer,
         middleware=[context_editing],
     )
@@ -106,6 +114,7 @@ async def build_agent() -> TravelAgent:
         toolset=toolset,
         checkpointer=checkpointer,
         model_name=llm.active_model_name(),
+        destinations=covered,
     )
 
 

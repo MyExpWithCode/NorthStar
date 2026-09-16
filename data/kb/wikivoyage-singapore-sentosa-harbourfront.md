@@ -5,7 +5,10 @@ source_url: "https://en.wikivoyage.org/wiki/Singapore/Sentosa%20and%20Harbourfro
 publisher: Wikivoyage
 license: CC BY-SA 4.0
 origin: curated
-retrieved_at: "2026-09-16T04:54:28+00:00"
+destination: Singapore
+kind: district
+facets: ""
+retrieved_at: "2026-09-16T08:13:04+00:00"
 ---
 
 # Wikivoyage: Singapore/Sentosa and Harbourfront

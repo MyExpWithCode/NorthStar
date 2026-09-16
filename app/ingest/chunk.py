@@ -11,13 +11,17 @@ Two-stage split:
    long "See" section becomes several chunks without cutting a POI listing in
    half.
 
+Every chunk also carries its **destination**, so a question about a place
+the knowledge base does not cover is refused rather than answered from another
+city's guide.
+
 Every chunk is then **tagged with categories**. The `indoor` / `outdoor` tags
 are load-bearing rather than decorative: they are what lets the agent retrieve
 indoor alternatives once the weather tool reports a wet day.
 
     python -m app.ingest.chunk --stats
     python -m app.ingest.chunk --category indoor --sample 3
-    python -m app.ingest.chunk --source wikipedia-singapore-mrt --sample 2
+    python -m app.ingest.chunk --destination Singapore --sample 2
 """
 
 from __future__ import annotations
@@ -85,18 +89,6 @@ HEADING_RULES: tuple[tuple[re.Pattern[str], tuple[str, ...]], ...] = tuple(
     for pattern, categories in _HEADING_PATTERNS
 )
 
-#: Curated sources whose entire document is about one known facet. A document's
-#: lead section carries no H2, so the heading rules alone leave it untagged even
-#: when the subject is obvious ("Mass Rapid Transit" contains neither "MRT" nor
-#: "transport"). Documents added later through the /admin UI have no entry here
-#: and fall back to the heading and keyword rules.
-SOURCE_CATEGORIES: dict[str, tuple[str, ...]] = {
-    "wikipedia-singapore-mrt": ("transport",),
-    "wikipedia-singaporean-cuisine": ("food",),
-    "wikipedia-tourism-in-singapore": ("attractions",),
-    "wikipedia-culture-of-singapore": ("culture",),
-}
-
 #: Content keywords. A chunk needs this many distinct matches before it earns a
 #: tag, so one passing mention of a park does not make a chunk "outdoor".
 MIN_KEYWORD_HITS = 2
@@ -137,13 +129,19 @@ def classify(section_path: str, text: str, record: SourceRecord) -> list[str]:
         if pattern.search(section_path):
             categories.update(tags)
 
-    # A district guide is about a neighbourhood whatever its section names say,
-    # and every chunk of a dedicated itinerary article is itinerary content.
-    if record.source_id.startswith("wikivoyage-singapore-"):
+    # What kind of document this is tells us things its section names do not:
+    # a district guide is about a neighbourhood whatever its headings say, and
+    # every chunk of a dedicated itinerary article is itinerary content. Taken
+    # from the registry rather than from source-id patterns, so adding a new
+    # destination needs no change here.
+    if record.kind == "district":
         categories.add("neighbourhoods")
-    if record.source_id.startswith("wikivoyage-itinerary-"):
+    elif record.kind == "itinerary":
         categories.add("itinerary")
-    categories.update(SOURCE_CATEGORIES.get(record.source_id, ()))
+
+    # Document-level subjects, for chunks whose own heading classifies nothing
+    # -- typically a lead section, which carries no H2 at all.
+    categories.update(facet for facet in record.facets if facet)
 
     haystack = f"{section_path}\n{text}"
     if _count_keyword_hits(haystack, INDOOR_KEYWORDS) >= MIN_KEYWORD_HITS:
@@ -188,6 +186,8 @@ def split_document(record: SourceRecord, body: str) -> list[Document]:
                     metadata={
                         "source_id": record.source_id,
                         "source_title": record.source_title,
+                        "destination": record.destination,
+                        "kind": record.kind,
                         "source_url": record.source_url,
                         "publisher": record.publisher,
                         "license": record.license,
@@ -235,7 +235,18 @@ def print_stats(chunks: list[Document]) -> None:
         else:
             untagged += 1
 
-    print(f"{len(chunks):,} chunks from {len(by_source)} sources")
+    from collections import Counter as _Counter
+
+    by_destination = _Counter(
+        chunk.metadata.get("destination") or "(not place-specific)"
+        for chunk in chunks
+    )
+    print(f"{len(chunks):,} chunks from {len(by_source)} sources, "
+          f"{len(by_destination)} destination(s)")
+    print()
+    print("per destination:")
+    for name, count in by_destination.most_common():
+        print(f"  {count:>5}  {name}")
     print()
     print("length distribution (chars):")
     print(
@@ -277,6 +288,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="Print N sample chunks.")
     parser.add_argument("--category", metavar="TAG", help="Only chunks with this tag.")
     parser.add_argument("--source", metavar="SOURCE_ID", help="Only this source.")
+    parser.add_argument("--destination", metavar="PLACE",
+                        help="Only chunks for this destination.")
     parser.add_argument("--untagged", action="store_true",
                         help="Only chunks that earned no category.")
     args = parser.parse_args(argv)
@@ -286,10 +299,20 @@ def main(argv: list[str] | None = None) -> int:
         print("No chunks produced. Run `python -m app.ingest.fetch_sources` first.")
         return 1
 
-    filtered = bool(args.source or args.category or args.untagged)
+    filtered = bool(
+        args.source or args.category or args.untagged or args.destination
+    )
     selected = chunks
     if args.source:
         selected = [c for c in selected if c.metadata["source_id"] == args.source]
+    if args.destination:
+        from app.ingest.registry import normalise_destination
+
+        wanted = normalise_destination(args.destination)
+        selected = [
+            c for c in selected
+            if normalise_destination(c.metadata.get("destination", "")) == wanted
+        ]
     if args.category:
         selected = [c for c in selected if args.category in c.metadata["categories"]]
     if args.untagged:

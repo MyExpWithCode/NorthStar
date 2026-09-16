@@ -5,7 +5,10 @@ source_url: "https://en.wikivoyage.org/wiki/Three%20days%20in%20Singapore"
 publisher: Wikivoyage
 license: CC BY-SA 4.0
 origin: curated
-retrieved_at: "2026-09-16T05:04:58+00:00"
+destination: Singapore
+kind: itinerary
+facets: ""
+retrieved_at: "2026-09-16T08:13:13+00:00"
 ---
 
 # Wikivoyage: Three days in Singapore

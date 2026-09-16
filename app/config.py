@@ -39,8 +39,11 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-opus-5"
 
     # -- Destination --------------------------------------------------------
+    #: The destination seeded by `python -m app.ingest.fetch_sources`. It is a
+    #: DEFAULT, not a limit: the knowledge base holds a destination per
+    #: document and more can be added with `--add-destination`, so what the
+    #: assistant can answer comes from the registry rather than from here.
     destination: str = "Singapore"
-    destination_currency: str = "SGD"
     home_currency: str = "INR"
 
     # -- Retrieval ----------------------------------------------------------

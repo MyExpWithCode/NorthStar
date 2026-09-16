@@ -21,11 +21,12 @@ import argparse
 import re
 import sys
 import time
+import json
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from bs4 import BeautifulSoup
 from markdownify import markdownify
@@ -58,6 +59,10 @@ _last_request_at = 0.0
 MIN_USABLE_TEXT_CHARS = 2_000
 
 CC_BY_SA = "CC BY-SA 4.0"
+
+#: The destination shipped with the project. Others are added with
+#: `--add-destination`, which needs no code change.
+SINGAPORE = "Singapore"
 
 #: Reference apparatus that is never useful for travel planning.
 ALWAYS_DROP_SECTIONS = (
@@ -125,6 +130,13 @@ class CuratedSource:
     page_title: str | None = None
     #: Direct URL, for generic pages.
     page_url: str | None = None
+    #: The place this document is about. "" for non-place-specific documents.
+    destination: str = ""
+    #: guide | district | itinerary | reference -- see registry.Kind.
+    kind: str = "reference"
+    #: Subjects of the whole document, used to tag chunks whose own heading
+    #: classifies nothing (a lead section has no H2).
+    facets: tuple[str, ...] = field(default=())
     #: Commit the document itself to git. Only for permissive licences.
     committed: bool = True
     #: Top-level sections to drop, lower-cased. Used to keep 200 kB reference
@@ -149,18 +161,45 @@ class CuratedSource:
         return settings.kb_dir / f"{self.source_id}.md"
 
 
-def _wikivoyage_district(slug: str, page_title: str) -> CuratedSource:
+def _slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+
+def _wikivoyage_guide(destination: str, page_title: str | None = None) -> CuratedSource:
+    """A destination's main Wikivoyage travel guide."""
+    page_title = page_title or destination
     return CuratedSource(
-        source_id=f"wikivoyage-singapore-{slug}",
+        source_id=f"wikivoyage-{_slug(destination)}",
+        source_title=f"Wikivoyage: {page_title} Travel Guide",
+        publisher="Wikivoyage",
+        license=CC_BY_SA,
+        wiki_host="en.wikivoyage.org",
+        page_title=page_title,
+        destination=destination,
+        kind="guide",
+    )
+
+
+def _wikivoyage_district(
+    destination: str, page_title: str, slug: str | None = None
+) -> CuratedSource:
+    """A district or neighbourhood guide within a destination."""
+    slug = slug or _slug(page_title.split("/")[-1])
+    return CuratedSource(
+        source_id=f"wikivoyage-{_slug(destination)}-{slug}",
         source_title=f"Wikivoyage: {page_title}",
         publisher="Wikivoyage",
         license=CC_BY_SA,
         wiki_host="en.wikivoyage.org",
         page_title=page_title,
+        destination=destination,
+        kind="district",
     )
 
 
-def _wikivoyage_itinerary(slug: str, page_title: str) -> CuratedSource:
+def _wikivoyage_itinerary(
+    destination: str, slug: str, page_title: str
+) -> CuratedSource:
     """A standalone Wikivoyage itinerary article.
 
     The "Itineraries" section of the main Singapore guide is only a list of
@@ -175,6 +214,8 @@ def _wikivoyage_itinerary(slug: str, page_title: str) -> CuratedSource:
         license=CC_BY_SA,
         wiki_host="en.wikivoyage.org",
         page_title=page_title,
+        destination=destination,
+        kind="itinerary",
     )
 
 
@@ -192,30 +233,26 @@ def _wikivoyage_itinerary(slug: str, page_title: str) -> CuratedSource:
 # ---------------------------------------------------------------------------
 CURATED_SOURCES: tuple[CuratedSource, ...] = (
     # -- Wikivoyage: the travel guide proper -------------------------------
-    CuratedSource(
-        source_id="wikivoyage-singapore",
-        source_title="Wikivoyage: Singapore Travel Guide",
-        publisher="Wikivoyage",
-        license=CC_BY_SA,
-        wiki_host="en.wikivoyage.org",
-        page_title="Singapore",
-    ),
-    _wikivoyage_district("marina-bay", "Singapore/Marina Bay"),
-    _wikivoyage_district("riverside", "Singapore/Riverside"),
-    _wikivoyage_district("orchard", "Singapore/Orchard"),
-    _wikivoyage_district("chinatown", "Singapore/Chinatown"),
-    _wikivoyage_district("little-india", "Singapore/Little India"),
-    _wikivoyage_district("bugis", "Singapore/Bugis"),
-    _wikivoyage_district("sentosa-harbourfront", "Singapore/Sentosa and Harbourfront"),
-    _wikivoyage_district("east-coast", "Singapore/East Coast"),
-    _wikivoyage_district("north-and-west", "Singapore/North and West"),
-    _wikivoyage_district("balestier", "Singapore/Balestier"),
+    _wikivoyage_guide(SINGAPORE),
+    _wikivoyage_district(SINGAPORE, "Singapore/Marina Bay", "marina-bay"),
+    _wikivoyage_district(SINGAPORE, "Singapore/Riverside", "riverside"),
+    _wikivoyage_district(SINGAPORE, "Singapore/Orchard", "orchard"),
+    _wikivoyage_district(SINGAPORE, "Singapore/Chinatown", "chinatown"),
+    _wikivoyage_district(SINGAPORE, "Singapore/Little India", "little-india"),
+    _wikivoyage_district(SINGAPORE, "Singapore/Bugis", "bugis"),
+    _wikivoyage_district(SINGAPORE, "Singapore/Sentosa and Harbourfront", "sentosa-harbourfront"),
+    _wikivoyage_district(SINGAPORE, "Singapore/East Coast", "east-coast"),
+    _wikivoyage_district(SINGAPORE, "Singapore/North and West", "north-and-west"),
+    _wikivoyage_district(SINGAPORE, "Singapore/Balestier", "balestier"),
     # -- Wikivoyage: day-by-day itineraries --------------------------------
-    _wikivoyage_itinerary("three-days", "Three days in Singapore"),
-    _wikivoyage_itinerary("southern-ridges-walk", "Southern Ridges Walk"),
+    _wikivoyage_itinerary(SINGAPORE, "three-days", "Three days in Singapore"),
+    _wikivoyage_itinerary(SINGAPORE, "southern-ridges-walk", "Southern Ridges Walk"),
     # -- Wikipedia: transport, food, attractions, culture ------------------
     CuratedSource(
         source_id="wikipedia-singapore-mrt",
+        destination=SINGAPORE,
+        kind="reference",
+        facets=("transport",),
         source_title="Wikipedia: Mass Rapid Transit (Singapore)",
         publisher="Wikipedia",
         license=CC_BY_SA,
@@ -234,6 +271,9 @@ CURATED_SOURCES: tuple[CuratedSource, ...] = (
     ),
     CuratedSource(
         source_id="wikipedia-singaporean-cuisine",
+        destination=SINGAPORE,
+        kind="reference",
+        facets=("food",),
         source_title="Wikipedia: Singaporean cuisine",
         publisher="Wikipedia",
         license=CC_BY_SA,
@@ -247,6 +287,9 @@ CURATED_SOURCES: tuple[CuratedSource, ...] = (
     ),
     CuratedSource(
         source_id="wikipedia-tourism-in-singapore",
+        destination=SINGAPORE,
+        kind="reference",
+        facets=("attractions",),
         source_title="Wikipedia: Tourism in Singapore",
         publisher="Wikipedia",
         license=CC_BY_SA,
@@ -256,6 +299,9 @@ CURATED_SOURCES: tuple[CuratedSource, ...] = (
     ),
     CuratedSource(
         source_id="wikipedia-culture-of-singapore",
+        destination=SINGAPORE,
+        kind="reference",
+        facets=("culture",),
         source_title="Wikipedia: Culture of Singapore",
         publisher="Wikipedia",
         license=CC_BY_SA,
@@ -266,6 +312,8 @@ CURATED_SOURCES: tuple[CuratedSource, ...] = (
     # -- Visit Singapore: attempted, expected to be unavailable ------------
     CuratedSource(
         source_id="visitsingapore-essential",
+        destination=SINGAPORE,
+        kind="reference",
         source_title="Visit Singapore: Essential Travel Information",
         publisher="Visit Singapore (Singapore Tourism Board)",
         license="All rights reserved - not redistributed",
@@ -274,6 +322,8 @@ CURATED_SOURCES: tuple[CuratedSource, ...] = (
     ),
     CuratedSource(
         source_id="visitsingapore-itineraries",
+        destination=SINGAPORE,
+        kind="reference",
         source_title="Visit Singapore: Sample Itineraries",
         publisher="Visit Singapore (Singapore Tourism Board)",
         license="All rights reserved - not redistributed",
@@ -282,6 +332,8 @@ CURATED_SOURCES: tuple[CuratedSource, ...] = (
     ),
     CuratedSource(
         source_id="visitsingapore-things-to-do",
+        destination=SINGAPORE,
+        kind="reference",
         source_title="Visit Singapore: Things to Do",
         publisher="Visit Singapore (Singapore Tourism Board)",
         license="All rights reserved - not redistributed",
@@ -289,6 +341,67 @@ CURATED_SOURCES: tuple[CuratedSource, ...] = (
         committed=False,
     ),
 )
+
+
+#: Wikivoyage subpages that are not travel content for the destination.
+_SKIP_SUBPAGE_WORDS = ("archive", "talk", "sandbox", "template")
+
+
+def discover_wikivoyage_destination(destination: str) -> list[CuratedSource]:
+    """Find the Wikivoyage guide and district pages for a destination.
+
+    Wikivoyage names district guides as subpages -- `Singapore/Chinatown`,
+    `Tokyo/Shinjuku` -- so the whole set for a city can be discovered from the
+    MediaWiki API rather than hand-listed. Redirects are skipped, since several
+    of them point at one district under different names.
+
+    Raises LookupError when the destination has no Wikivoyage guide, so a typo
+    produces a clear message instead of an empty knowledge base.
+    """
+    host = "en.wikivoyage.org"
+
+    def api(params: dict[str, str]) -> dict:
+        query = urlencode({**params, "format": "json", "formatversion": "2"})
+        return json.loads(_http_get(f"https://{host}/w/api.php?{query}"))
+
+    info = api({"action": "query", "prop": "info", "titles": destination})
+    pages = info.get("query", {}).get("pages", [])
+    if not pages or pages[0].get("missing"):
+        raise LookupError(
+            f"Wikivoyage has no article titled {destination!r}. Check the "
+            "spelling, or use the exact title from en.wikivoyage.org."
+        )
+    if "redirect" in pages[0]:
+        raise LookupError(
+            f"{destination!r} is a redirect on Wikivoyage. Use the title it "
+            "redirects to."
+        )
+
+    sources = [_wikivoyage_guide(destination, pages[0]["title"])]
+
+    listing = api({
+        "action": "query",
+        "list": "allpages",
+        "apprefix": destination + "/",
+        "apnamespace": "0",
+        "aplimit": "100",
+    })
+    subpages = [p["title"] for p in listing.get("query", {}).get("allpages", [])]
+    if subpages:
+        details = api({
+            "action": "query",
+            "prop": "info",
+            "titles": "|".join(subpages[:50]),
+        })
+        for page in details.get("query", {}).get("pages", []):
+            title = page.get("title", "")
+            if page.get("missing") or "redirect" in page:
+                continue
+            leaf = title.split("/")[-1].lower()
+            if any(word in leaf for word in _SKIP_SUBPAGE_WORDS):
+                continue
+            sources.append(_wikivoyage_district(destination, title))
+    return sources
 
 
 class SourceUnavailable(RuntimeError):
@@ -469,6 +582,9 @@ def write_document(source: CuratedSource, markdown: str, retrieved_at: str) -> P
         "publisher": source.publisher,
         "license": source.license,
         "origin": "curated",
+        "destination": source.destination,
+        "kind": source.kind,
+        "facets": ",".join(source.facets),
         "retrieved_at": retrieved_at,
     }
     body = f"# {source.source_title}\n\n{markdown}"
@@ -519,6 +635,9 @@ def fetch_all(
                     publisher=source.publisher,
                     license=source.license,
                     origin="curated",
+                    destination=source.destination,
+                    kind=source.kind,
+                    facets=list(source.facets),
                     doc_path=None,
                     committed=source.committed,
                     state="unavailable",
@@ -537,6 +656,9 @@ def fetch_all(
                 publisher=source.publisher,
                 license=source.license,
                 origin="curated",
+                destination=source.destination,
+                kind=source.kind,
+                facets=list(source.facets),
                 doc_path=relative_doc_path(path),
                 retrieved_at=retrieved_at,
                 committed=source.committed,
@@ -555,15 +677,22 @@ def print_status_table(outcomes: list[FetchOutcome]) -> None:
     id_width = max((len(o.source.source_id) for o in outcomes), default=10)
 
     print()
-    print(f"{'':2}  {'source_id'.ljust(id_width)}  {'chars':>7}  detail")
-    print(f"{'-' * 2}  {'-' * id_width}  {'-' * 7}  {'-' * 40}")
+    dest_width = max(
+        (len(o.source.destination or "-") for o in outcomes), default=6
+    )
+    print(f"{'':2}  {'source_id'.ljust(id_width)}  "
+          f"{'destination'.ljust(dest_width)}  {'chars':>7}  detail")
+    print(f"{'-' * 2}  {'-' * id_width}  {'-' * dest_width}  "
+          f"{'-' * 7}  {'-' * 40}")
     for outcome in outcomes:
         chars = f"{outcome.chars:,}" if outcome.chars else ""
         detail = outcome.detail
         if len(detail) > 60:
             detail = detail[:57] + "..."
         print(
-            f"{symbols[outcome.state]:2}  {outcome.source.source_id.ljust(id_width)}  "
+            f"{symbols[outcome.state]:2}  "
+            f"{outcome.source.source_id.ljust(id_width)}  "
+            f"{(outcome.source.destination or '-').ljust(dest_width)}  "
             f"{chars:>7}  {detail}"
         )
 
@@ -587,7 +716,8 @@ def print_status_table(outcomes: list[FetchOutcome]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Seed the curated Singapore knowledge base."
+        description="Build the destination knowledge base. Seeds the curated "
+                    "set by default; --add-destination adds another place."
     )
     parser.add_argument(
         "--only",
@@ -603,11 +733,43 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--list", action="store_true", help="List the curated source ids and exit."
     )
+    parser.add_argument(
+        "--add-destination",
+        metavar="PLACE",
+        help="Discover and fetch a new destination's Wikivoyage guide and "
+             "district pages, e.g. --add-destination Tokyo. Rebuild the index "
+             "afterwards with `python -m app.ingest.build_index`.",
+    )
+    parser.add_argument(
+        "--discover-only",
+        action="store_true",
+        help="With --add-destination, list the pages that would be fetched "
+             "and exit without fetching them.",
+    )
     args = parser.parse_args(argv)
 
     if args.list:
         for source in CURATED_SOURCES:
             print(f"{source.source_id:40}  {source.publisher:16}  {source.url}")
+        return 0
+
+    if args.add_destination:
+        try:
+            discovered = discover_wikivoyage_destination(args.add_destination)
+        except (LookupError, urllib.error.URLError, OSError) as exc:
+            parser.error(str(exc))
+        print(f"{args.add_destination}: {len(discovered)} page(s) on Wikivoyage")
+        for source in discovered:
+            print(f"  {source.kind:9} {source.page_title}")
+        if args.discover_only:
+            return 0
+        print()
+        outcomes = fetch_all(tuple(discovered), skip_existing=args.skip_existing)
+        print_status_table(outcomes)
+        if any(o.state == "ok" for o in outcomes):
+            print()
+            print("Now rebuild the index so these become searchable:")
+            print("  python -m app.ingest.build_index")
         return 0
 
     selected = CURATED_SOURCES

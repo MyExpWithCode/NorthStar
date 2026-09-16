@@ -5,7 +5,10 @@ source_url: "https://en.wikivoyage.org/wiki/Singapore/Riverside"
 publisher: Wikivoyage
 license: CC BY-SA 4.0
 origin: curated
-retrieved_at: "2026-09-16T04:53:14+00:00"
+destination: Singapore
+kind: district
+facets: ""
+retrieved_at: "2026-09-16T08:12:41+00:00"
 ---
 
 # Wikivoyage: Singapore/Riverside

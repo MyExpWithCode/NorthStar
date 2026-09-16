@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Knowledge base — Singapore Travel Assistant</title>
+<title>Knowledge base — Travel Planning Assistant</title>
 <!--
   The ingestion page. Its job is to make the RAG pipeline inspectable instead of
   hiding it behind scripts: what is indexed, under what licence, how many chunks
@@ -141,6 +141,29 @@
     </div>
   </section>
 
+  <section>
+    <h2>Destinations</h2>
+    <div class="body">
+      <p class="note" style="margin-top:0">
+        Retrieval is scoped per destination. A question about a place with no
+        documents is refused and the covered list named, rather than answered
+        from another place's guide.
+      </p>
+      <table>
+        <thead><tr>
+          <th>Destination</th><th class="num">Documents</th>
+          <th class="num">Chunks</th><th>Document kinds</th><th></th>
+        </tr></thead>
+        <tbody id="destinations"><tr><td colspan="5" class="note">loading…</td></tr></tbody>
+      </table>
+      <p class="note" style="margin-bottom:0">
+        Add a destination from the command line — it discovers that place's
+        Wikivoyage guide and district pages automatically:<br>
+        <code>python -m app.ingest.fetch_sources --add-destination Tokyo</code>
+      </p>
+    </div>
+  </section>
+
   <section id="jobs">
     <h2>Rebuild job</h2>
     <div class="body">
@@ -156,10 +179,10 @@
     <div class="body" style="padding:0">
       <table>
         <thead><tr>
-          <th>Document</th><th>Origin</th><th>Licence</th>
+          <th>Document</th><th>Destination</th><th>Origin</th><th>Licence</th>
           <th class="num">Chunks</th><th></th>
         </tr></thead>
-        <tbody id="sources"><tr><td colspan="5" class="note" style="padding:16px">
+        <tbody id="sources"><tr><td colspan="6" class="note" style="padding:16px">
           loading…</td></tr></tbody>
       </table>
     </div>
@@ -192,6 +215,10 @@
       <div class="row" style="margin-bottom:14px">
         <div class="field"><label for="pTitle">Title</label>
           <input type="text" id="pTitle"></div>
+        <div class="field"><label for="pDestination">Destination</label>
+          <input type="text" id="pDestination" list="destinationOptions"
+                 placeholder="leave blank if not place-specific">
+          <datalist id="destinationOptions"></datalist></div>
         <div class="field"><label for="pLicence">Licence</label>
           <input type="text" id="pLicence"></div>
         <div class="field"><label for="pPublisher">Publisher</label>
@@ -245,6 +272,8 @@ async function api(path, options) {
 function setBusy(busy) {
   jobRunning = busy;
   $("rebuild").disabled = busy;
+  document.querySelectorAll("[data-remove-destination]")
+    .forEach((b) => { b.disabled = busy; });
   $("confirm").disabled = busy;
   $("fetchUrl").disabled = busy;
   document.querySelectorAll("button.danger").forEach((b) => { b.disabled = busy; });
@@ -278,6 +307,7 @@ function renderSources(status) {
       : "";
     return `<tr>
       <td><div class="src-title">${link}</div>${state}</td>
+      <td class="note">${escapeHtml(s.destination || "—")}</td>
       <td><span class="tag ${escapeHtml(s.origin)}">${escapeHtml(s.origin)}</span></td>
       <td class="note">${escapeHtml(s.license)}</td>
       <td class="num">${(s.chunk_count ?? 0).toLocaleString()}</td>
@@ -287,14 +317,29 @@ function renderSources(status) {
     </tr>`;
   }).join("");
   $("sources").innerHTML = rows ||
-    `<tr><td colspan="5" class="note" style="padding:16px">No sources.
+    `<tr><td colspan="6" class="note" style="padding:16px">No sources.
       Run <code>python -m app.ingest.fetch_sources</code> or add one below.</td></tr>`;
+}
+
+function renderDestinations(status) {
+  const rows = (status.destinations || []).map((d) => `
+    <tr>
+      <td class="src-title">${escapeHtml(d.destination)}</td>
+      <td class="num">${d.document_count}</td>
+      <td class="num">${(d.chunk_count ?? 0).toLocaleString()}</td>
+      <td class="note">${(d.kinds || []).map(escapeHtml).join(", ")}</td>
+      <td><button class="danger" type="button"
+            data-remove-destination="${escapeHtml(d.destination)}">Remove all</button></td>
+    </tr>`).join("");
+  $("destinations").innerHTML = rows ||
+    `<tr><td colspan="5" class="note">No destinations indexed.</td></tr>`;
 }
 
 async function refresh() {
   try {
     const status = await api("/admin/status");
     renderStats(status);
+    renderDestinations(status);
     renderSources(status);
     $("dropTypes").textContent =
       `${(status.supported_uploads || []).join("  ")} · up to ${status.max_upload_mb} MB`;
@@ -346,6 +391,9 @@ function showPreview(preview) {
   $("pChars").textContent = (preview.char_count || 0).toLocaleString();
   $("pHeadings").textContent = preview.heading_count ?? 0;
   $("pTitle").value = preview.title || "";
+  $("pDestination").value = "";
+  $("destinationOptions").innerHTML = (preview.known_destinations || [])
+    .map((d) => `<option value="${escapeHtml(d)}"></option>`).join("");
   $("pLicence").value = preview.suggested_license || "";
   $("pPublisher").value = preview.origin === "upload" ? "User supplied" : "";
   $("pWarnings").innerHTML = (preview.warnings || [])
@@ -411,6 +459,7 @@ $("confirm").addEventListener("click", async () => {
       body: JSON.stringify({
         preview_token: pendingToken,
         title: $("pTitle").value.trim() || null,
+        destination: $("pDestination").value.trim() || null,
         license: $("pLicence").value.trim() || null,
         publisher: $("pPublisher").value.trim() || null,
       }),
@@ -433,6 +482,26 @@ $("rebuild").addEventListener("click", async () => {
     const job = await api("/admin/rebuild", { method: "POST" });
     toast("Rebuild started.");
     trackJob(job.job_id);
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
+$("destinations").addEventListener("click", async (event) => {
+  const place = event.target.dataset?.removeDestination;
+  if (!place) return;
+  if (!confirm(`Remove every document for "${place}"?
+
+The index is rebuilt `
+    + `and the assistant will no longer answer questions about it.`)) return;
+  try {
+    const result = await api(
+      `/admin/destinations/${encodeURIComponent(place)}`, { method: "DELETE" });
+    toast(result.note
+      || `Removed ${result.removed_documents.length} document(s) for `
+         + `${result.removed_destination}. Rebuilding…`);
+    if (result.job) trackJob(result.job.job_id);
+    refresh();
   } catch (error) {
     toast(error.message, true);
   }

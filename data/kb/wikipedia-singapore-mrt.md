@@ -5,7 +5,10 @@ source_url: "https://en.wikipedia.org/wiki/Mass%20Rapid%20Transit%20%28Singapore
 publisher: Wikipedia
 license: CC BY-SA 4.0
 origin: curated
-retrieved_at: "2026-09-16T04:53:31+00:00"
+destination: Singapore
+kind: reference
+facets: transport
+retrieved_at: "2026-09-16T08:14:04+00:00"
 ---
 
 # Wikipedia: Mass Rapid Transit (Singapore)

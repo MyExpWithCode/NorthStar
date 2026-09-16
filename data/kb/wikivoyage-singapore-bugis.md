@@ -5,7 +5,10 @@ source_url: "https://en.wikivoyage.org/wiki/Singapore/Bugis"
 publisher: Wikivoyage
 license: CC BY-SA 4.0
 origin: curated
-retrieved_at: "2026-09-16T04:53:26+00:00"
+destination: Singapore
+kind: district
+facets: ""
+retrieved_at: "2026-09-16T08:13:03+00:00"
 ---
 
 # Wikivoyage: Singapore/Bugis

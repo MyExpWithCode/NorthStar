@@ -5,7 +5,10 @@ source_url: "https://en.wikipedia.org/wiki/Culture%20of%20Singapore"
 publisher: Wikipedia
 license: CC BY-SA 4.0
 origin: curated
-retrieved_at: "2026-09-16T04:55:03+00:00"
+destination: Singapore
+kind: reference
+facets: culture
+retrieved_at: "2026-09-16T08:14:15+00:00"
 ---
 
 # Wikipedia: Culture of Singapore

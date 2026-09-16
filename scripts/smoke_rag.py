@@ -39,7 +39,12 @@ OUT_OF_SCOPE = [
 ]
 
 
-def invoke(query: str, categories: list[str] | None = None, k: int | None = None):
+def invoke(
+    query: str,
+    categories: list[str] | None = None,
+    k: int | None = None,
+    destination: str = "",
+):
     """Call the tool the way the agent will, returning (content, artifact).
 
     A tool declared `content_and_artifact` only yields its artifact when it is
@@ -54,6 +59,7 @@ def invoke(query: str, categories: list[str] | None = None, k: int | None = None
             # Groq reject whole tool calls server-side (see kb_tool.py).
             "args": {
                 "query": query,
+                "destination": destination,
                 "categories": categories or [],
                 "k": k or 0,
             },
@@ -122,6 +128,44 @@ def main() -> int:
             failures.append(f"category filter leaked for {categories}")
         for source in sources[:2]:
             print(f"       {source['score']:.2f}  {source['section_path']}")
+
+    print()
+    print("=" * 78)
+    print("DESTINATION SCOPING -- the knowledge base is per place")
+    print("=" * 78)
+    covered = retriever.destination_names()
+    print(f"\ncovered destinations: {covered}")
+
+    for place in covered:
+        _, artifact = invoke("must-visit attractions", destination=place)
+        places = {s["destination"] for s in artifact.get("sources", [])}
+        ok = bool(places) and places == {place}
+        print(f"\n{'OK ' if ok else 'FAIL'} scoped to {place}: "
+              f"{len(artifact.get('sources', []))} sources, "
+              f"destinations={places or 'none'}")
+        if not ok:
+            failures.append(f"scoping to {place} returned {places}")
+
+    for unknown in ("Reykjavik", "Rome", "Ulaanbaatar"):
+        content, artifact = invoke("must-visit attractions", destination=unknown)
+        refused = content.startswith("DESTINATION_NOT_COVERED")
+        no_sources = not artifact.get("sources")
+        names_covered = bool(artifact.get("covered_destinations"))
+        ok = refused and no_sources and names_covered
+        print(f"\n{'OK ' if ok else 'FAIL'} uncovered {unknown}: "
+              f"refused={refused}, "
+              f"sources={len(artifact.get('sources', []))}, "
+              f"named what it covers={names_covered}")
+        if not ok:
+            failures.append(f"{unknown} was not refused cleanly")
+
+    for variant in ("singapore", "  SINGAPORE  "):
+        _, artifact = invoke("hawker food", destination=variant)
+        resolved = artifact.get("destination")
+        ok = resolved == "Singapore"
+        print(f"\n{'OK ' if ok else 'FAIL'} {variant!r} resolved to {resolved!r}")
+        if not ok:
+            failures.append(f"{variant!r} did not resolve to Singapore")
 
     print()
     print("=" * 78)

@@ -5,7 +5,10 @@ source_url: "https://en.wikipedia.org/wiki/Tourism%20in%20Singapore"
 publisher: Wikipedia
 license: CC BY-SA 4.0
 origin: curated
-retrieved_at: "2026-09-16T04:54:42+00:00"
+destination: Singapore
+kind: reference
+facets: attractions
+retrieved_at: "2026-09-16T08:14:12+00:00"
 ---
 
 # Wikipedia: Tourism in Singapore

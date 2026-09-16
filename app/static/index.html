@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Singapore Travel Assistant</title>
+<title>Travel Planning Assistant</title>
 <!--
   Deliberately one file, no build step. The interesting part of this UI is not
   its styling but the two evidence panels under every answer: knowledge-base
@@ -122,7 +122,7 @@
 </head>
 <body>
 <header>
-  <h1>Singapore Travel Assistant</h1>
+  <h1>Travel Planning Assistant</h1>
   <span id="status">connecting…</span>
   <span class="spacer"></span>
   <button id="newchat" type="button">New conversation</button>
@@ -136,7 +136,8 @@
   <div class="turn">
     <div class="role">assistant</div>
     <div class="bubble">
-      <p><strong>Ask about a trip to Singapore.</strong></p>
+      <p><strong>Ask about a trip.</strong></p>
+      <p id="coverage">Loading the knowledge base…</p>
       <p>Destination facts come from a knowledge base built from Wikivoyage and
       Wikipedia. Weather and exchange rates come from MCP tools that call
       Open-Meteo and the European Central Bank. Every answer shows which it
@@ -147,7 +148,7 @@
 
 <footer>
   <div class="composer">
-    <textarea id="input" rows="1" placeholder="Create a three-day Singapore itinerary for next week and adjust it to the weather forecast…"></textarea>
+    <textarea id="input" rows="1" placeholder="Ask about a destination, the weather, or converting your budget…"></textarea>
     <button id="send" type="button">Send</button>
   </div>
   <div class="hints" id="hints"></div>
@@ -165,18 +166,27 @@ const statusEl = document.getElementById("status");
 let sessionId = localStorage.getItem(SESSION_KEY) || "";
 let busy = false;
 
-const EXAMPLES = [
-  "What are the must-visit attractions in Singapore?",
-  "What is the weather in Singapore right now?",
-  "Convert INR 50,000 to SGD",
-  "Create a three-day itinerary for next week and adjust it to the forecast",
-  "Which neighbourhoods are best for cultural experiences?",
-  "What indoor attractions can I visit?",
-];
-
-document.getElementById("hints").innerHTML = EXAMPLES
-  .map((q) => `<button type="button" data-q="${q.replace(/"/g, "&quot;")}">${q}</button>`)
-  .join("");
+// Example prompts are generated from the destinations the knowledge base
+// actually covers, so the UI never suggests a place the index cannot answer.
+function buildExamples(names) {
+  const place = names[0] || "Singapore";
+  const examples = [
+    `What are the must-visit attractions in ${place}?`,
+    `What is the weather in ${place} right now?`,
+    "Convert INR 50,000 to SGD",
+    `Create a three-day ${place} itinerary for next week and adjust it to the forecast`,
+    `Which neighbourhoods in ${place} are best for cultural experiences?`,
+    `What indoor attractions can I visit in ${place}?`,
+  ];
+  if (names.length > 1) {
+    examples.push(`Compare ${names[0]} and ${names[1]} for a short trip`);
+  }
+  examples.push("What are the must-see sights in Reykjavik?");
+  document.getElementById("hints").innerHTML = examples
+    .map((q) => `<button type="button" data-q="${q.replace(/"/g, "&quot;")}">${q}</button>`)
+    .join("");
+}
+buildExamples([]);
 document.getElementById("hints").addEventListener("click", (event) => {
   const q = event.target.dataset.q;
   if (q && !busy) { input.value = q; ask(); }
@@ -323,9 +333,22 @@ document.getElementById("newchat").addEventListener("click", async () => {
   try {
     const health = await (await fetch("/health")).json();
     const kb = health.knowledge_base.manifest || {};
+    const names = (health.knowledge_base.destinations || [])
+      .map((d) => d.destination);
     statusEl.textContent =
       `${health.llm.model || "no model"} · ${kb.chunk_count || 0} chunks · `
+      + `${names.length} destination${names.length === 1 ? "" : "s"} · `
       + `${Object.values(health.mcp.servers || {}).flat().length} MCP tools`;
+    const coverage = document.getElementById("coverage");
+    if (coverage) {
+      coverage.innerHTML = names.length
+        ? `The knowledge base covers <strong>${names.map(escapeHtml).join(", ")}</strong>.
+           Ask about anywhere else and it will say so rather than guess —
+           though weather and currency work for any city.`
+        : "No destinations are indexed yet. Add one from the "
+          + `<a href="/admin">Knowledge base</a> page.`;
+    }
+    buildExamples(names);
     showDegraded(health.mcp.degraded);
     if (!health.knowledge_base.ready) {
       banner.style.display = "block";

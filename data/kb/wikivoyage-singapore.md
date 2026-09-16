@@ -5,7 +5,10 @@ source_url: "https://en.wikivoyage.org/wiki/Singapore"
 publisher: Wikivoyage
 license: CC BY-SA 4.0
 origin: curated
-retrieved_at: "2026-09-16T04:53:06+00:00"
+destination: Singapore
+kind: guide
+facets: ""
+retrieved_at: "2026-09-16T08:12:35+00:00"
 ---
 
 # Wikivoyage: Singapore Travel Guide

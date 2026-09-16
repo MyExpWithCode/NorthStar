@@ -1,1 +1,1 @@
-"""AI Travel Planning Assistant -- RAG knowledge base + MCP tools for Singapore."""
+"""AI Travel Planning Assistant -- per-destination RAG knowledge base + MCP tools."""

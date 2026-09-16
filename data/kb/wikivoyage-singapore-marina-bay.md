@@ -5,7 +5,10 @@ source_url: "https://en.wikivoyage.org/wiki/Singapore/Marina%20Bay"
 publisher: Wikivoyage
 license: CC BY-SA 4.0
 origin: curated
-retrieved_at: "2026-09-16T04:53:11+00:00"
+destination: Singapore
+kind: district
+facets: ""
+retrieved_at: "2026-09-16T08:12:39+00:00"
 ---
 
 # Wikivoyage: Singapore/Marina Bay

@@ -5,7 +5,10 @@ source_url: "https://en.wikivoyage.org/wiki/Southern%20Ridges%20Walk"
 publisher: Wikivoyage
 license: CC BY-SA 4.0
 origin: curated
-retrieved_at: "2026-09-16T05:04:59+00:00"
+destination: Singapore
+kind: itinerary
+facets: ""
+retrieved_at: "2026-09-16T08:14:02+00:00"
 ---
 
 # Wikivoyage: Southern Ridges Walk

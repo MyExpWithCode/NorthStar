@@ -129,6 +129,7 @@ class IngestionService:
             "index": manifest,
             "index_ready": manifest is not None,
             "sources": [record.model_dump() for record in registry.sources],
+            "destinations": [d.model_dump() for d in registry.destinations()],
             "source_count": len(registry.available()),
             "total_chunks": registry.total_chunks(),
             "active_job": active.as_dict() if active else None,
@@ -204,6 +205,7 @@ class IngestionService:
             {
                 "preview_token": token,
                 "origin": origin,
+                "known_destinations": SourceRegistry.load().destination_names(),
                 "source_url": source_url,
                 "suggested_license": (
                     USER_SUPPLIED_LICENCE if origin == "upload" else "unknown"
@@ -219,6 +221,7 @@ class IngestionService:
         preview_token: str,
         *,
         title: str | None = None,
+        destination: str | None = None,
         license_: str | None = None,
         publisher: str | None = None,
         source_url: str | None = None,
@@ -239,6 +242,12 @@ class IngestionService:
         if registry.get(source_id) is not None:
             source_id = f"{source_id}-{uuid.uuid4().hex[:6]}"
 
+        # A user document with no destination is not place-specific and will
+        # not be returned by a destination-scoped search. Defaulting it to the
+        # configured destination would be a guess, so it is left blank unless
+        # given.
+        place = (destination or "").strip()
+
         licence = (license_ or "").strip() or (
             USER_SUPPLIED_LICENCE if preview.origin == "upload" else "unknown"
         )
@@ -252,6 +261,9 @@ class IngestionService:
             "publisher": (publisher or "").strip() or "User supplied",
             "license": licence,
             "origin": preview.origin,
+            "destination": place,
+            "kind": "user",
+            "facets": "",
             "retrieved_at": retrieved_at,
         }
         path = settings.kb_dir / f"{source_id}.md"
@@ -268,6 +280,8 @@ class IngestionService:
                 publisher=metadata["publisher"],
                 license=licence,
                 origin=preview.origin,
+                destination=place,
+                kind="user",
                 doc_path=relative_doc_path(path),
                 retrieved_at=retrieved_at,
                 committed=False,
@@ -277,7 +291,12 @@ class IngestionService:
         registry.save()
         logger.info("Added source %s from %s", source_id, preview.origin)
 
-        response = {"source_id": source_id, "title": resolved_title, "job": None}
+        response = {
+            "source_id": source_id,
+            "title": resolved_title,
+            "destination": place,
+            "job": None,
+        }
         if rebuild:
             response["job"] = self.start_rebuild(reason=f"added {source_id}")
         return response
@@ -302,6 +321,38 @@ class IngestionService:
             response["note"] = (
                 "No sources remain, so the index was not rebuilt. Add a source "
                 "to rebuild it."
+            )
+        return response
+
+    def remove_destination(self, destination: str, *, rebuild: bool = True) -> dict:
+        """Remove every document for one place.
+
+        A destination is the unit a user thinks in -- "drop Kyoto" -- and
+        removing its documents one by one would rebuild the index once per
+        document.
+        """
+        registry = SourceRegistry.load()
+        resolved = registry.resolve_destination(destination)
+        if resolved is None:
+            known = registry.destination_names()
+            raise IngestionError(
+                f"No destination called {destination!r} in the knowledge base. "
+                f"It covers: {', '.join(known) or 'nothing'}."
+            )
+        removed = registry.remove_destination(resolved)
+        registry.save()
+        logger.info("Removed destination %s (%d documents)", resolved, len(removed))
+
+        response = {
+            "removed_destination": resolved,
+            "removed_documents": [r.source_id for r in removed],
+            "job": None,
+        }
+        if rebuild and registry.available():
+            response["job"] = self.start_rebuild(reason=f"removed {resolved}")
+        elif rebuild:
+            response["note"] = (
+                "No sources remain, so the index was not rebuilt."
             )
         return response
 

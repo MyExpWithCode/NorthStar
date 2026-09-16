@@ -2,14 +2,26 @@
 
 This file, not the directory listing, is the authority on what is in the
 knowledge base. Keeping it authoritative is what lets the `/admin` UI show
-licences and chunk counts, and lets a removal delete a document, its registry
-entry and its chunks together instead of leaving a half-deleted state.
+licences and chunk counts, lets a removal delete a document, its registry entry
+and its chunks together, and lets the assistant answer **which destinations it
+actually covers** rather than guessing.
+
+Three fields carry meaning beyond bookkeeping:
+
+* `destination` -- the place a document is about. Retrieval filters on it, so a
+  question about a city with no documents is refused instead of being answered
+  from another city's guide.
+* `kind` -- what sort of document it is. The chunker uses this instead of
+  parsing source ids, so adding a new destination needs no code change.
+* `facets` -- known subjects of the whole document, for documents whose lead
+  section carries no heading to classify.
 """
 
 from __future__ import annotations
 
 import json
 import os
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -28,11 +40,32 @@ Origin = Literal["curated", "url", "upload"]
 #: Keeping the failed attempt visible is more honest than dropping it.
 State = Literal["available", "unavailable", "missing"]
 
-REGISTRY_VERSION = 1
+#: What kind of document this is. Drives chunk tagging without the chunker
+#: having to recognise source-id patterns.
+#:   guide     -- a destination's main travel guide
+#:   district  -- a neighbourhood or district guide
+#:   itinerary -- a day-by-day plan
+#:   reference -- an encyclopaedic article on one subject
+#:   user      -- added by a user through /admin
+Kind = Literal["guide", "district", "itinerary", "reference", "user"]
+
+REGISTRY_VERSION = 2
+
+#: Used when a document is not about one specific place.
+UNKNOWN_DESTINATION = ""
 
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def normalise_destination(name: str) -> str:
+    """Canonical comparison form for a destination name.
+
+    Matching is case- and whitespace-insensitive so that "singapore",
+    "Singapore" and " Singapore " are the same place.
+    """
+    return " ".join((name or "").split()).casefold()
 
 
 class SourceRecord(BaseModel):
@@ -42,6 +75,12 @@ class SourceRecord(BaseModel):
     publisher: str
     license: str
     origin: Origin = "curated"
+    #: The place this document is about. Empty when it is not place-specific.
+    destination: str = UNKNOWN_DESTINATION
+    kind: Kind = "reference"
+    #: Subjects of the document as a whole, for chunks whose own heading says
+    #: nothing (typically a document's lead section).
+    facets: list[str] = Field(default_factory=list)
     #: Project-root-relative POSIX path, so the registry stays portable.
     doc_path: str | None = None
     retrieved_at: str | None = None
@@ -63,6 +102,15 @@ class SourceRecord(BaseModel):
         return path is not None and path.is_file()
 
 
+class DestinationSummary(BaseModel):
+    """What the knowledge base holds for one place."""
+
+    destination: str
+    document_count: int
+    chunk_count: int
+    kinds: list[str] = Field(default_factory=list)
+
+
 class SourceRegistry(BaseModel):
     version: int = REGISTRY_VERSION
     updated_at: str = Field(default_factory=utc_now_iso)
@@ -82,7 +130,8 @@ class SourceRegistry(BaseModel):
         path = path or settings.registry_path
         path.parent.mkdir(parents=True, exist_ok=True)
         self.updated_at = utc_now_iso()
-        self.sources.sort(key=lambda record: record.source_id)
+        self.version = REGISTRY_VERSION
+        self.sources.sort(key=lambda record: (record.destination, record.source_id))
         payload = self.model_dump_json(indent=2) + "\n"
         temp_path = path.with_suffix(path.suffix + ".tmp")
         temp_path.write_text(payload, encoding="utf-8")
@@ -102,6 +151,55 @@ class SourceRegistry(BaseModel):
     def total_chunks(self) -> int:
         return sum(r.chunk_count for r in self.sources)
 
+    def destinations(self) -> list[DestinationSummary]:
+        """Places the knowledge base can actually answer about, best-covered first.
+
+        Only `available` sources count. A destination whose documents are all
+        missing or unavailable is not covered, and saying otherwise would be
+        the kind of unsupported claim this application exists to avoid.
+        """
+        grouped: dict[str, list[SourceRecord]] = defaultdict(list)
+        for record in self.available():
+            if record.destination:
+                grouped[record.destination].append(record)
+        summaries = [
+            DestinationSummary(
+                destination=name,
+                document_count=len(records),
+                chunk_count=sum(r.chunk_count for r in records),
+                kinds=sorted({r.kind for r in records}),
+            )
+            for name, records in grouped.items()
+        ]
+        return sorted(
+            summaries, key=lambda s: (-s.document_count, s.destination)
+        )
+
+    def destination_names(self) -> list[str]:
+        return [summary.destination for summary in self.destinations()]
+
+    def resolve_destination(self, name: str) -> str | None:
+        """Map a user- or model-supplied name to a covered destination.
+
+        Returns None when the place is not covered, which the knowledge-base
+        tool turns into an explicit "I do not have a knowledge base for that"
+        rather than results from a different city.
+        """
+        wanted = normalise_destination(name)
+        if not wanted:
+            return None
+        covered = self.destination_names()
+        for candidate in covered:
+            if normalise_destination(candidate) == wanted:
+                return candidate
+        # Tolerate "Singapore City" / "city of Singapore" style variations
+        # without matching unrelated places.
+        for candidate in covered:
+            normalised = normalise_destination(candidate)
+            if normalised in wanted or wanted in normalised:
+                return candidate
+        return None
+
     # -- mutation -----------------------------------------------------------
     def upsert(self, record: SourceRecord) -> SourceRecord:
         """Insert or replace a record, preserving the existing chunk count.
@@ -117,7 +215,9 @@ class SourceRegistry(BaseModel):
         self.sources.append(record)
         return record
 
-    def remove(self, source_id: str, delete_document: bool = True) -> SourceRecord | None:
+    def remove(
+        self, source_id: str, delete_document: bool = True
+    ) -> SourceRecord | None:
         """Remove a source and, by default, its document."""
         record = self.get(source_id)
         if record is None:
@@ -128,6 +228,17 @@ class SourceRegistry(BaseModel):
                 path.unlink()
         self.sources.remove(record)
         return record
+
+    def remove_destination(self, destination: str) -> list[SourceRecord]:
+        """Remove every document for one place."""
+        resolved = self.resolve_destination(destination) or destination
+        doomed = [
+            r for r in self.sources
+            if normalise_destination(r.destination) == normalise_destination(resolved)
+        ]
+        for record in doomed:
+            self.remove(record.source_id, delete_document=True)
+        return doomed
 
     def set_chunk_counts(self, counts: dict[str, int]) -> None:
         for record in self.sources:

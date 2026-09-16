@@ -5,7 +5,10 @@ source_url: "https://en.wikipedia.org/wiki/Singaporean%20cuisine"
 publisher: Wikipedia
 license: CC BY-SA 4.0
 origin: curated
-retrieved_at: "2026-09-16T04:54:38+00:00"
+destination: Singapore
+kind: reference
+facets: food
+retrieved_at: "2026-09-16T08:14:10+00:00"
 ---
 
 # Wikipedia: Singaporean cuisine

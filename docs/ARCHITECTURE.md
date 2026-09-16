@@ -186,6 +186,16 @@ never a build failure.
 district. Splitting on headings keeps a retrieved chunk self-contained and gives us a free
 `section_path` like `Singapore > Get around > MRT` for citations.
 
+**Why record a destination per document.** The registry stores the place each document is about, the
+chunker copies it into every chunk, and the retriever filters on it. Three sentinels then mean three
+different things, which is the point: `DESTINATION_NOT_COVERED` ("I have no guide for that place"),
+`NO_RELEVANT_CONTENT` ("I have that place, but not that topic") and `KNOWLEDGE_BASE_UNAVAILABLE` ("no
+index at all"). Collapsing the first two would let a question about an uncovered city be answered from a
+covered one.
+
+The chunker reads a document's `kind` (guide / district / itinerary / reference / user) and `facets` from
+the registry rather than recognising source-id patterns, so adding a destination needs no code change.
+
 **Why tag categories at ingest.** Each chunk gets a `categories` list covering the brief's required
 facets — `attractions`, `neighbourhoods`, `transport`, `culture`, `practical`, `food`, `itinerary` — plus
 `shopping` and `accommodation`, which fall out of the Wikivoyage section names for free, and
