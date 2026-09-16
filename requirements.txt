@@ -1,0 +1,8 @@
+# Direct dependencies only, added task by task as each one is actually needed.
+#
+#   uv venv
+#   uv pip install -r requirements.txt
+#   uv pip install -e .          # makes `app` importable from any directory
+
+# T1 - typed configuration loaded from .env
+pydantic-settings==2.15.0

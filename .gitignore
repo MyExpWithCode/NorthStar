@@ -1,0 +1,33 @@
+# Virtual environment
+.venv/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Rebuildable RAG artefacts
+data/index/
+
+# Knowledge-base documents that we may not redistribute.
+# These are fetched at setup time by `python -m app.ingest.fetch_sources`.
+# Wikimedia sources (CC BY-SA) ARE committed -- see docs/ARCHITECTURE.md section 3.
+data/kb/visitsingapore-*.md
+
+# Documents added at runtime through the /admin ingestion UI
+data/kb/upload-*.md
+data/kb/url-*.md
+
+# Local model cache (FastEmbed ONNX downloads)
+.cache/
+local_cache/
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

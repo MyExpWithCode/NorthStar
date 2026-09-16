@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "northstar-travel-assistant"
+version = "0.1.0"
+description = "AI Travel Planning Assistant for Singapore - RAG knowledge base + MCP tools"
+requires-python = ">=3.12"
+
+# Runtime dependencies are tracked in requirements.txt and added task by task,
+# so the reason each package is present stays visible. This project is installed
+# in editable mode only to make `app` importable from any working directory:
+#     uv pip install -e .
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
