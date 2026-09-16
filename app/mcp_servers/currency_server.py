@@ -99,8 +99,13 @@ def _validate(code: str, label: str) -> tuple[str | None, str | None]:
         )
     try:
         supported = _supported_currencies()
-    except httpx.HTTPError as exc:
-        return None, f"Could not reach the exchange-rate service: {exc}"
+    except httpx.HTTPError:
+        # The supported-currency list is only metadata. If that endpoint
+        # hiccups we must not block a conversion whose rate endpoint is
+        # perfectly healthy -- accept a well-formed code and let /latest be
+        # the authority. An unsupported pair still produces a clear error
+        # from the conversion call itself.
+        return normalised, None
     if normalised not in supported:
         return None, (
             f"{normalised} is not a currency this service publishes rates for. "
