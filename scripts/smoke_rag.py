@@ -50,7 +50,13 @@ def invoke(query: str, categories: list[str] | None = None, k: int | None = None
     message = search_travel_knowledge_base.invoke(
         {
             "name": "search_travel_knowledge_base",
-            "args": {"query": query, "categories": categories, "k": k},
+            # The tool takes [] / 0 rather than None: a nullable schema made
+            # Groq reject whole tool calls server-side (see kb_tool.py).
+            "args": {
+                "query": query,
+                "categories": categories or [],
+                "k": k or 0,
+            },
             "id": "smoke-test",
             "type": "tool_call",
         }
