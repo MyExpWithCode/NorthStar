@@ -12,3 +12,6 @@ pydantic-settings==2.15.0
 # for why. httpx arrives in T6 for the MCP servers.
 beautifulsoup4==4.15.0
 markdownify==1.2.3
+
+# T3 - heading-aware chunking (pulls langchain-core, which T5 also uses)
+langchain-text-splitters==1.1.2

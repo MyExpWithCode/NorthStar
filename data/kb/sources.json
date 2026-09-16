@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-09-16T04:57:25+00:00",
+  "updated_at": "2026-09-16T05:05:10+00:00",
   "sources": [
     {
       "source_id": "visitsingapore-essential",
@@ -95,6 +95,34 @@
       "origin": "curated",
       "doc_path": "data/kb/wikipedia-tourism-in-singapore.md",
       "retrieved_at": "2026-09-16T04:54:42+00:00",
+      "committed": true,
+      "chunk_count": 0,
+      "state": "available",
+      "note": null
+    },
+    {
+      "source_id": "wikivoyage-itinerary-southern-ridges-walk",
+      "source_title": "Wikivoyage: Southern Ridges Walk",
+      "source_url": "https://en.wikivoyage.org/wiki/Southern%20Ridges%20Walk",
+      "publisher": "Wikivoyage",
+      "license": "CC BY-SA 4.0",
+      "origin": "curated",
+      "doc_path": "data/kb/wikivoyage-itinerary-southern-ridges-walk.md",
+      "retrieved_at": "2026-09-16T05:04:59+00:00",
+      "committed": true,
+      "chunk_count": 0,
+      "state": "available",
+      "note": null
+    },
+    {
+      "source_id": "wikivoyage-itinerary-three-days",
+      "source_title": "Wikivoyage: Three days in Singapore",
+      "source_url": "https://en.wikivoyage.org/wiki/Three%20days%20in%20Singapore",
+      "publisher": "Wikivoyage",
+      "license": "CC BY-SA 4.0",
+      "origin": "curated",
+      "doc_path": "data/kb/wikivoyage-itinerary-three-days.md",
+      "retrieved_at": "2026-09-16T05:04:58+00:00",
       "committed": true,
       "chunk_count": 0,
       "state": "available",

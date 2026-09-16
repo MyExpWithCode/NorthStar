@@ -10,7 +10,7 @@ Design is fixed first in [ARCHITECTURE.md](ARCHITECTURE.md); code follows it.
 | T0 | Architecture diagrams & design doc | ✅ done — [ARCHITECTURE.md](ARCHITECTURE.md) |
 | T1 | Scaffold, config, dependency workflow | ✅ done — `app/config.py`, `pyproject.toml`, `.env.example` |
 | T2 | Source registry + knowledge-base acquisition | ✅ done — 15 docs, 522 KB, `sources.json` |
-| T3 | Heading-aware chunking + category tagging | ⬜ |
+| T3 | Heading-aware chunking + category tagging | ✅ done — 926 chunks, 11 tags, 0.1% untagged |
 | T4 | Embeddings + FAISS index + atomic swap | ⬜ |
 | T5 | Retriever + grounding guard + index reload | ⬜ |
 | T6 | MCP server 1 — weather | ⬜ |
@@ -178,7 +178,25 @@ failure with a warning.
 `source_url`, `license`, `section_path` (`Singapore > Get around > MRT`), `chunk_id`, and a derived
 `categories` list — `attractions`, `neighbourhoods`, `transport`, `culture`, `food`, `itinerary`, plus
 **`indoor` / `outdoor`**. The indoor/outdoor tag is load-bearing: it drives the rainy-day swap in T11.
-**Installs:** `langchain-text-splitters`.
+**Installs:** `langchain-text-splitters` (brings `langchain-core`).
+
+**As built.** Chunking surfaced a content gap and two tagging gaps, all fixed:
+- **The knowledge base had almost no itinerary content.** Wikivoyage's "Itineraries" section is only a
+  *list of links* to separate articles, so `itinerary` matched 1 chunk out of 877. Added two Wikivoyage
+  itinerary articles as sources (`Three days in Singapore`, `Southern Ridges Walk`) — `itinerary` now
+  covers 50 chunks. This directly serves the brief's flagship three-day-itinerary scenario, so it was
+  worth going back to T2 for.
+- **Document lead sections were untagged** because they carry no H2 and the heading rules only read the
+  section path ("Mass Rapid Transit" contains neither "MRT" nor "transport"). Added an explicit
+  `SOURCE_CATEGORIES` map for curated documents whose whole subject is known; uploaded documents have no
+  entry and fall back to heading/keyword rules.
+- **Wikivoyage's fixed section names** "Respect", "Talk", "Learn", "Work" are exactly the cultural and
+  practical tips the brief asks for, but matched no rule. Added them; untagged fell 43 → 1 chunk.
+
+A low-signal filter for markdown-table chunks was **considered and rejected after measuring**: only 13 of
+926 chunks are table-heavy, and the lowest letter-ratio chunks turned out to be embassy listings with
+addresses and phone numbers — useful content a ratio filter would have discarded.
+
 **Verify:** `python -m app.ingest.chunk --stats` prints chunk count, length distribution, per-source and
 per-category counts; spot-check a transport chunk and an indoor-museum chunk.
 

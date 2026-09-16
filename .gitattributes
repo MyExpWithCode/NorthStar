@@ -1,0 +1,3 @@
+# Normalise line endings so the repo does not accumulate mixed CRLF/LF.
+* text=auto eol=lf
+*.png binary

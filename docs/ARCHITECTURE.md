@@ -145,18 +145,19 @@ flowchart TB
     IDX --> RELOAD
 ```
 
-**Curated seed sources** (the CLI path — the brief requires ≥3 public resources; this delivers 15):
+**Curated seed sources** (the CLI path — the brief requires ≥3 public resources; this delivers 17):
 
 | Source | Docs | Licence | Shipped how |
 |---|---|---|---|
 | Wikivoyage: Singapore + 10 district pages | 11 | CC BY-SA 4.0 | committed snapshot |
+| Wikivoyage itineraries: Three days in Singapore, Southern Ridges Walk | 2 | CC BY-SA 4.0 | committed snapshot |
 | Wikipedia: Mass Rapid Transit (Singapore) | 1 | CC BY-SA 4.0 | committed snapshot |
 | Wikipedia: Singaporean cuisine | 1 | CC BY-SA 4.0 | committed snapshot |
 | Wikipedia: Tourism in Singapore | 1 | CC BY-SA 4.0 | committed snapshot |
 | Wikipedia: Culture of Singapore | 1 | CC BY-SA 4.0 | committed snapshot |
 | Visit Singapore: essential info / itineraries / things to do | 0 | restrictive | **attempted, unavailable** |
 
-**15 documents, ~523,000 characters, 132 `##` sections and 211 `###` sections.** The Wikivoyage district
+**17 documents, ~553,000 characters, 926 chunks.** The Wikivoyage district
 pages carry the POI-level detail that makes answers useful -- addresses, opening hours, prices -- so the
 HTML cleanup deliberately preserves Wikivoyage listing markup while stripping navigation and map widgets.
 The two large Wikipedia articles are section-filtered at fetch time (MRT keeps Network, Fares, Hours and
@@ -185,10 +186,16 @@ never a build failure.
 district. Splitting on headings keeps a retrieved chunk self-contained and gives us a free
 `section_path` like `Singapore > Get around > MRT` for citations.
 
-**Why tag categories at ingest.** Each chunk gets a `categories` list drawn from the brief's required
-facets — `attractions`, `neighbourhoods`, `transport`, `culture`, `food`, `itinerary`, plus
+**Why tag categories at ingest.** Each chunk gets a `categories` list covering the brief's required
+facets — `attractions`, `neighbourhoods`, `transport`, `culture`, `practical`, `food`, `itinerary` — plus
+`shopping` and `accommodation`, which fall out of the Wikivoyage section names for free, and
 **`indoor` / `outdoor`**. The indoor/outdoor tag is load-bearing, not decorative: it is what lets the
 agent retrieve indoor alternatives for a rainy day in §5's flagship scenario.
+
+Tags come from three signals, strongest first: the **section path** (regex rules over heading names, which
+is why heading preservation matters), an explicit **per-source subject** for curated documents whose lead
+sections carry no heading, and **content keywords** requiring at least two distinct matches so that one
+passing mention of a park does not make a chunk "outdoor". As built: **926 chunks, 0.1% untagged.**
 
 ---
 

@@ -160,6 +160,24 @@ def _wikivoyage_district(slug: str, page_title: str) -> CuratedSource:
     )
 
 
+def _wikivoyage_itinerary(slug: str, page_title: str) -> CuratedSource:
+    """A standalone Wikivoyage itinerary article.
+
+    The "Itineraries" section of the main Singapore guide is only a list of
+    links to these articles, so without fetching them the knowledge base has
+    almost no day-by-day planning content -- which is exactly what the brief's
+    flagship scenario asks for.
+    """
+    return CuratedSource(
+        source_id=f"wikivoyage-itinerary-{slug}",
+        source_title=f"Wikivoyage: {page_title}",
+        publisher="Wikivoyage",
+        license=CC_BY_SA,
+        wiki_host="en.wikivoyage.org",
+        page_title=page_title,
+    )
+
+
 # ---------------------------------------------------------------------------
 # The curated source set.
 #
@@ -192,6 +210,9 @@ CURATED_SOURCES: tuple[CuratedSource, ...] = (
     _wikivoyage_district("east-coast", "Singapore/East Coast"),
     _wikivoyage_district("north-and-west", "Singapore/North and West"),
     _wikivoyage_district("balestier", "Singapore/Balestier"),
+    # -- Wikivoyage: day-by-day itineraries --------------------------------
+    _wikivoyage_itinerary("three-days", "Three days in Singapore"),
+    _wikivoyage_itinerary("southern-ridges-walk", "Southern Ridges Walk"),
     # -- Wikipedia: transport, food, attractions, culture ------------------
     CuratedSource(
         source_id="wikipedia-singapore-mrt",
