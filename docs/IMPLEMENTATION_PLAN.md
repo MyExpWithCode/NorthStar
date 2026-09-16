@@ -13,7 +13,7 @@ Design is fixed first in [ARCHITECTURE.md](ARCHITECTURE.md); code follows it.
 | T3 | Heading-aware chunking + category tagging | ✅ done — 926 chunks, 11 tags, 0.1% untagged |
 | T4 | Embeddings + FAISS index + atomic swap | ✅ done — 926 vectors, 384-dim, floor calibrated |
 | T5 | Retriever + grounding guard + index reload | ✅ done — `scripts/smoke_rag.py` all green |
-| T6 | MCP server 1 — weather | ⬜ |
+| T6 | MCP server 1 — weather | ✅ done — 2 tools, stdio verified |
 | T7 | MCP server 2 — currency | ⬜ |
 | T8 | MCP client wiring | ⬜ |
 | T9 | LLM factory | ⬜ |
