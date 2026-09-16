@@ -8,6 +8,14 @@ produce a plausible-looking but invented number.
 
 from __future__ import annotations
 
+import sys as _sys
+
+# The assistant's provenance labels are emoji; a Windows cp1252 console would
+# raise UnicodeEncodeError when printing them.
+for _stream in (_sys.stdout, _sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 import asyncio
 import sys
 

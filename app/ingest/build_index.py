@@ -5,9 +5,10 @@
 
 Two design points worth knowing:
 
-**Cosine similarity, not squashed distance.** The index normalises vectors and
-uses inner product, and the relevance score function is the identity, so a
-"relevance score" here *is* the cosine similarity between query and chunk.
+**Cosine similarity, not squashed distance.** FastEmbed emits unit-length
+vectors and the index compares them by inner product with an identity relevance
+function, so a "relevance score" here *is* the cosine similarity between query
+and chunk (verified against hand-computed cosine).
 That matters because `settings.relevance_floor` -- the threshold below which the
 assistant says "not in the knowledge base" rather than inventing an answer --
 has to be a number a human can reason about and tune.
@@ -57,7 +58,7 @@ def get_embeddings() -> Embeddings:
 def _identity(score: float) -> float:
     """Relevance score function.
 
-    Vectors are L2-normalised and compared by inner product, so the raw score
+    The vectors are unit-length and compared by inner product, so the raw score
     already *is* cosine similarity. Returning it unchanged keeps
     `relevance_floor` interpretable instead of a squashed distance.
     """
@@ -65,10 +66,16 @@ def _identity(score: float) -> float:
 
 
 def new_vector_store(chunks: list[Document], embeddings: Embeddings) -> FAISS:
+    """Build an index whose relevance scores are exact cosine similarities.
+
+    `normalize_L2` is deliberately NOT passed: FAISS ignores it for inner-product
+    indexes (and warns), and it is unnecessary because FastEmbed's bge models
+    already emit unit-length vectors. Verified -- stored vector norms are 1.0 and
+    reported relevance scores match hand-computed cosine to 1e-4.
+    """
     return FAISS.from_documents(
         chunks,
         embeddings,
-        normalize_L2=True,
         distance_strategy=DistanceStrategy.MAX_INNER_PRODUCT,
         relevance_score_fn=_identity,
     )
@@ -92,7 +99,6 @@ def load_vector_store(embeddings: Embeddings | None = None) -> FAISS:
         embeddings or get_embeddings(),
         index_name=INDEX_NAME,
         allow_dangerous_deserialization=True,
-        normalize_L2=True,
         distance_strategy=DistanceStrategy.MAX_INNER_PRODUCT,
         relevance_score_fn=_identity,
     )

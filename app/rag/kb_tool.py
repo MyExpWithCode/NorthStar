@@ -18,7 +18,7 @@ The tool returns `content_and_artifact`:
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated
 
 from langchain_core.tools import tool
 
@@ -26,9 +26,15 @@ from app.config import settings
 from app.rag import retriever
 from app.rag.retriever import NO_RELEVANT_CONTENT
 
-#: The tags assigned at ingest. Named explicitly in the schema so the model
-#: filters with a real tag instead of inventing one.
-Category = Literal[
+#: The tags assigned at ingest.
+#:
+#: Deliberately NOT expressed as a Literal enum in the tool schema. Groq
+#: validates tool arguments server-side and rejects the whole call with a 400
+#: when a model invents a value -- observed with `"family"`, which killed the
+#: chat turn outright. A permissive `list[str]` that this tool validates itself
+#: degrades instead: unknown tags are dropped, the model is told which ones
+#: were ignored, and the search still runs.
+VALID_CATEGORIES: tuple[str, ...] = (
     "attractions",
     "neighbourhoods",
     "transport",
@@ -40,7 +46,7 @@ Category = Literal[
     "accommodation",
     "indoor",
     "outdoor",
-]
+)
 
 _NOTHING_FOUND_TEMPLATE = (
     f"{NO_RELEVANT_CONTENT}\n"
@@ -51,25 +57,54 @@ _NOTHING_FOUND_TEMPLATE = (
 )
 
 
+#: Characters of chunk text sent to the model per excerpt.
+#:
+#: Excerpts dominate the request payload, and the payload is re-sent on
+#: every call of the agent loop. Groq's free tier allows 8,000 tokens per
+#: minute, which an untruncated multi-search turn exceeds. The index keeps
+#: the full chunk; this only bounds what travels to the model.
+EXCERPT_CHAR_LIMIT = 520
+
+
 def _format_excerpt(marker: str, hit: retriever.Hit) -> str:
+    """One citable excerpt, kept as compact as it can usefully be.
+
+    The section path is in the header, and the chunk text starts with the
+    same path (prepended at ingest for embedding context), so the duplicate
+    is stripped. The source URL is NOT sent to the model: it would cost
+    tokens on every call, and the artifact already carries it to the UI,
+    where the citation is rendered as a link.
+    """
     metadata = hit.metadata
-    return (
-        f"[{marker}] {metadata['source_title']} — {metadata['section_path']}\n"
-        f"relevance {hit.score:.2f} | {metadata['source_url']}\n"
-        f"{hit.document.page_content.strip()}"
+    section = metadata['section_path']
+    body = hit.document.page_content.strip()
+    if body.startswith(section):
+        body = body[len(section):].strip()
+    if len(body) > EXCERPT_CHAR_LIMIT:
+        body = body[:EXCERPT_CHAR_LIMIT].rsplit(' ', 1)[0] + ' ...'
+    # section_path already begins with the document title (it is the H1), so
+    # printing the title separately would repeat it on every excerpt.
+    label = section if section.startswith(metadata['source_title']) else (
+        metadata['source_title'] + ' - ' + section
     )
+    header = '[' + marker + '] ' + label + ' (relevance ' + format(hit.score, '.2f') + ')'
+    return header + chr(10) + body
 
 
 @tool("search_travel_knowledge_base", response_format="content_and_artifact")
 def search_travel_knowledge_base(
     query: str,
     categories: Annotated[
-        list[Category] | None,
-        "Optional tag filter. Use ['indoor'] for wet-weather alternatives, "
-        "['outdoor'] for fair-weather activities, ['itinerary'] for day-by-day "
-        "plans, ['transport'] for getting around. Omit to search everything.",
-    ] = None,
-    k: Annotated[int | None, "How many excerpts to return. Defaults to 6."] = None,
+        list[str],
+        "Optional tag filter; must be chosen from exactly these values: "
+        "attractions, neighbourhoods, transport, culture, practical, food, "
+        "itinerary, shopping, accommodation, indoor, outdoor. Use ['indoor'] "
+        "for wet-weather alternatives, ['outdoor'] for fair-weather "
+        "activities, ['itinerary'] for day-by-day plans, ['transport'] for "
+        "getting around. Pass an empty list to search everything. A chunk must "
+        "carry ALL the tags you list, so prefer one tag at a time.",
+    ] = [],
+    k: Annotated[int, "How many excerpts to return. 0 means the default of 6."] = 0,
 ) -> tuple[str, dict]:
     """Search the Singapore travel knowledge base for destination facts.
 
@@ -88,6 +123,19 @@ def search_travel_knowledge_base(
     begins with NO_RELEVANT_CONTENT, say the knowledge base does not cover the
     topic rather than answering anyway.
     """
+    requested = [c.strip().lower() for c in (categories or []) if c and c.strip()]
+    known = [c for c in requested if c in VALID_CATEGORIES]
+    unknown = [c for c in requested if c not in VALID_CATEGORIES]
+    ignored_note = ""
+    if unknown:
+        ignored_note = (
+            "\n\n(Ignored unknown category filter(s): "
+            + ", ".join(unknown)
+            + ". Valid values are: "
+            + ", ".join(VALID_CATEGORIES)
+            + ".)"
+        )
+
     if not retriever.is_ready():
         return (
             "KNOWLEDGE_BASE_UNAVAILABLE\n"
@@ -99,7 +147,7 @@ def search_travel_knowledge_base(
         )
 
     try:
-        hits = retriever.search(query, categories=categories, k=k)
+        hits = retriever.search(query, categories=known, k=k or None)
     except Exception as exc:  # index corrupt, disk gone, embedding failure
         return (
             "KNOWLEDGE_BASE_ERROR\n"
@@ -110,14 +158,16 @@ def search_travel_knowledge_base(
 
     if not hits:
         filter_note = (
-            f" (filtered to categories: {', '.join(categories)})" if categories else ""
+            f" (filtered to categories: {', '.join(known)})" if known else ""
         )
         return (
-            _NOTHING_FOUND_TEMPLATE.format(query=query, filter_note=filter_note),
+            _NOTHING_FOUND_TEMPLATE.format(query=query, filter_note=filter_note)
+            + ignored_note,
             {
                 "sources": [],
                 "query": query,
-                "categories": categories or [],
+                "categories": known,
+                "ignored_categories": unknown,
                 "relevance_floor": settings.relevance_floor,
             },
         )
@@ -129,7 +179,8 @@ def search_travel_knowledge_base(
     artifact = {
         "sources": [hit.as_source(marker) for marker, hit in zip(markers, hits)],
         "query": query,
-        "categories": categories or [],
+        "categories": known,
+        "ignored_categories": unknown,
         "relevance_floor": settings.relevance_floor,
     }
-    return content, artifact
+    return content + ignored_note, artifact

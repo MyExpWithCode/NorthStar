@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 
     # -- Retrieval ----------------------------------------------------------
     embedding_model: str = "BAAI/bge-small-en-v1.5"
-    retrieval_k: int = Field(default=6, ge=1, le=50)
+    retrieval_k: int = Field(default=5, ge=1, le=50)
     #: Cosine-similarity floor below which the KB tool returns
     #: NO_RELEVANT_CONTENT instead of weak chunks.
     #:

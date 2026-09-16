@@ -23,6 +23,13 @@ from app.ingest.build_index import index_exists, load_vector_store, read_manifes
 #: not cover the question, rather than an invented answer.
 NO_RELEVANT_CONTENT = "NO_RELEVANT_CONTENT"
 
+#: Hard ceiling on excerpts per search, regardless of what the model asks for.
+#: Each excerpt is up to ~1 kB of text, so an unbounded k lets a single tool
+#: call blow the context window -- and on a metered provider, the
+#: tokens-per-minute budget. Observed: the model asking for 15 excerpts across
+#: three searches in one turn triggered HTTP 429/413 from Groq.
+MAX_RETRIEVAL_K = 5
+
 _store: FAISS | None = None
 _lock = threading.Lock()
 
@@ -99,7 +106,7 @@ def search(
     scores comparable between a filtered and an unfiltered search, and avoids
     depending on vector-store-specific filter semantics.
     """
-    k = k or settings.retrieval_k
+    k = min(k or settings.retrieval_k, MAX_RETRIEVAL_K)
     wanted = {c.strip().lower() for c in (categories or []) if c.strip()}
     fetch_k = k * 6 if wanted else k
 

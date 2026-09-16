@@ -157,6 +157,10 @@ def get_chat_model(**overrides) -> BaseChatModel:
     if settings.llm_provider == "groq":
         from langchain_groq import ChatGroq
 
+        # Groq's free tier meters tokens per minute; a burst of retrieval-heavy
+        # turns hits 429. The SDK backs off and retries, which turns a
+        # transient limit into a slower answer rather than a failed one.
+        options.setdefault("max_retries", 5)
         return ChatGroq(model=resolve_groq_model(), api_key=key, **options)
 
     from langchain_anthropic import ChatAnthropic
