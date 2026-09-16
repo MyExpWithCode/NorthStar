@@ -102,6 +102,14 @@ def search(
     `categories` filters on the tags assigned at ingest -- passing
     `["indoor"]` is how the agent finds wet-weather alternatives.
 
+    The filter is **disjunctive**: a chunk matching ANY requested tag is kept.
+    Requiring all of them looked tidier but was destructive in practice --
+    asked for family activities the model passed
+    `["attractions", "indoor", "outdoor", "food"]`, and since few chunks carry
+    all four the search returned nothing at all. Tags are assigned by rules at
+    ingest, so treating a list as "any of these facets" is both what a model
+    means by it and what actually retrieves content.
+
     Over-fetching then filtering (rather than filtering inside FAISS) keeps the
     scores comparable between a filtered and an unfiltered search, and avoids
     depending on vector-store-specific filter semantics.
@@ -116,9 +124,9 @@ def search(
     for document, score in results:
         if score < settings.relevance_floor:
             continue
-        if wanted and not wanted <= {
-            c.lower() for c in document.metadata.get("categories", [])
-        }:
+        if wanted and wanted.isdisjoint(
+            {c.lower() for c in document.metadata.get("categories", [])}
+        ):
             continue
         hits.append(Hit(document=document, score=float(score)))
         if len(hits) == k:
