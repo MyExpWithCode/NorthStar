@@ -43,3 +43,8 @@ langgraph==1.2.11
 # T12 - upload parsers for the ingestion UI
 pypdf==6.18.1
 python-docx==1.2.0
+
+# T14 - HTTP surface
+fastapi==0.141.1
+uvicorn==0.53.0
+python-multipart==0.0.20
