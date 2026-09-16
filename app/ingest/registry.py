@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+from contextlib import contextmanager
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -240,6 +242,58 @@ class SourceRegistry(BaseModel):
             self.remove(record.source_id, delete_document=True)
         return doomed
 
+    def unassigned(self) -> list[SourceRecord]:
+        """Available documents with no destination.
+
+        These are a trap rather than a curiosity: a destination-scoped search
+        can never return them, so a travel document left unassigned is indexed
+        but unreachable. The /admin UI surfaces them for exactly that reason.
+        """
+        return [r for r in self.available() if not r.destination]
+
+    def update_source(
+        self,
+        source_id: str,
+        *,
+        destination: str | None = None,
+        title: str | None = None,
+    ) -> SourceRecord:
+        """Correct an existing source's destination and/or title.
+
+        Both are fixable after the fact for good reason: the destination is
+        what makes a document reachable by a scoped search, and the title is
+        what appears in every citation. A URL import guesses the title from the
+        first heading, which on Wikipedia is often the navigation "Contents".
+
+        The frontmatter is rewritten alongside the registry entry, so the
+        document stays self-describing and a re-read cannot disagree.
+        """
+        record = self.get(source_id)
+        if record is None:
+            raise KeyError(source_id)
+
+        if destination is not None:
+            record.destination = " ".join(destination.split())
+        if title is not None and title.strip():
+            record.source_title = " ".join(title.split())
+
+        path = record.resolved_path
+        if path is not None and path.is_file():
+            from app.ingest import frontmatter
+
+            metadata, body = frontmatter.loads(path.read_text(encoding="utf-8"))
+            if metadata:
+                metadata["destination"] = record.destination
+                metadata["source_title"] = record.source_title
+                path.write_text(
+                    frontmatter.dumps(metadata, body), encoding="utf-8"
+                )
+        return record
+
+    def set_destination(self, source_id: str, destination: str) -> SourceRecord:
+        """Back-compatible shim for the destination-only case."""
+        return self.update_source(source_id, destination=destination)
+
     def set_chunk_counts(self, counts: dict[str, int]) -> None:
         for record in self.sources:
             record.chunk_count = counts.get(record.source_id, 0)
@@ -263,6 +317,30 @@ class SourceRegistry(BaseModel):
                 record.chunk_count = 0
                 drifted.append(record.source_id)
         return drifted
+
+
+#: Guards the load-modify-save sequence.
+#:
+#: Every writer previously did its own load, edited the object and saved, which
+#: is a lost-update race: the background rebuild writes chunk counts while an
+#: HTTP request writes a destination, and whichever saves last silently
+#: discards the other edit. Observed in practice. A single-process app only
+#: needs an in-process lock; a multi-process deployment would want the data in
+#: a store that does its own transactions.
+_write_lock = threading.RLock()
+
+
+@contextmanager
+def transaction():
+    """Load the registry, let the caller edit it, then save -- atomically.
+
+    Reentrant, so a helper that itself opens a transaction can be called from
+    inside one without deadlocking.
+    """
+    with _write_lock:
+        registry = SourceRegistry.load()
+        yield registry
+        registry.save()
 
 
 def relative_doc_path(path: Path) -> str:

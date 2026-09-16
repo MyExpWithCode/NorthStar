@@ -25,6 +25,7 @@ from langchain.agents.middleware import (
 )
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.tracers.context import collect_runs
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
 
 from app import llm, mcp_client, observability, prompts
@@ -44,7 +45,7 @@ class TravelAgent:
 
     graph: Any
     toolset: McpToolset
-    checkpointer: InMemorySaver
+    checkpointer: BaseCheckpointSaver
     model_name: str
     destinations: list[str] = field(default_factory=list)
     kb_tool_available: bool = True
@@ -67,11 +68,17 @@ class TravelAgent:
         }
 
 
-async def build_agent() -> TravelAgent:
+async def build_agent(
+    checkpointer: BaseCheckpointSaver | None = None,
+) -> TravelAgent:
     """Connect the MCP servers and assemble the agent.
 
     Called once at application startup. A failed MCP server reduces the tool
     list rather than preventing startup -- see `app.mcp_client`.
+
+    `checkpointer` holds conversation history. The API passes a SQLite-backed
+    one so conversations survive a restart; omitting it falls back to memory,
+    which is what the smoke scripts want.
     """
     toolset = await mcp_client.connect()
     logger.info("MCP tools:\n%s", mcp_client.describe(toolset))
@@ -81,7 +88,7 @@ async def build_agent() -> TravelAgent:
 
     model = llm.get_chat_model()
     tools = [search_travel_knowledge_base, *toolset.tools]
-    checkpointer = InMemorySaver()
+    checkpointer = checkpointer or InMemorySaver()
 
     # Retrieval excerpts accumulate in history and are the bulk of every
     # request. Left alone, the third turn of a conversation gets rejected as
@@ -345,14 +352,69 @@ def history(agent: TravelAgent, session_id: str) -> list[dict]:
     ]
 
 
-def reset(agent: TravelAgent, session_id: str) -> None:
-    """Forget a conversation.
+async def list_conversations(agent: TravelAgent, limit: int = 40) -> list[dict]:
+    """Recent conversations, newest first.
 
-    InMemorySaver has no public delete, so the thread is emptied by writing a
-    fresh checkpoint rather than reaching into its internals.
+    The checkpointer stores several checkpoints per turn, so the scan groups by
+    thread and keeps the most recent per thread. The first user message doubles
+    as the title -- which is what someone scanning a list actually recognises.
     """
+    saver = agent.checkpointer
+    lister = getattr(saver, "alist", None)
+    if lister is None:
+        return []
+
+    threads: dict[str, dict] = {}
     try:
-        agent.checkpointer.delete_thread(session_id)
-    except (AttributeError, NotImplementedError):
-        logger.info("Checkpointer has no delete_thread; thread %s left in place",
-                    session_id)
+        # Scan more checkpoints than conversations wanted, since each turn
+        # writes several.
+        async for tup in lister(None, limit=limit * 12):
+            thread_id = (tup.config or {}).get("configurable", {}).get("thread_id")
+            if not thread_id:
+                continue
+            messages = (tup.checkpoint or {}).get(
+                "channel_values", {}
+            ).get("messages") or []
+            human = next(
+                (m for m in messages if isinstance(m, HumanMessage)), None
+            )
+            entry = threads.get(thread_id)
+            turns = sum(1 for m in messages if isinstance(m, HumanMessage))
+            candidate = {
+                "session_id": thread_id,
+                "title": _answer_text(human)[:110] if human else "(no messages)",
+                "turns": turns,
+                "messages": len(messages),
+                "updated_at": (tup.checkpoint or {}).get("ts"),
+            }
+            # alist yields newest first, so the first sighting of a thread is
+            # its latest state.
+            if entry is None or (candidate["messages"] or 0) > (entry["messages"] or 0):
+                threads[thread_id] = candidate
+    except Exception as exc:
+        logger.warning("Could not list conversations: %s", exc)
+        return []
+
+    ordered = sorted(
+        threads.values(), key=lambda c: c["updated_at"] or "", reverse=True
+    )
+    return ordered[:limit]
+
+
+async def reset(agent: TravelAgent, session_id: str) -> None:
+    """Forget one conversation, from the store as well as from memory."""
+    saver = agent.checkpointer
+    for name in ("adelete_thread", "delete_thread"):
+        deleter = getattr(saver, name, None)
+        if deleter is None:
+            continue
+        try:
+            result = deleter(session_id)
+            if name.startswith("a"):
+                await result
+            return
+        except (NotImplementedError, AttributeError):
+            continue
+    logger.info(
+        "Checkpointer cannot delete threads; %s left in place", session_id
+    )

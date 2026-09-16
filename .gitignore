@@ -31,3 +31,6 @@ local_cache/
 .idea/
 Thumbs.db
 desktop.ini
+
+# Conversation history (SQLite; local runtime state)
+data/conversations.sqlite3*

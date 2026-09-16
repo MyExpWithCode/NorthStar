@@ -8,12 +8,171 @@ origin: curated
 destination: Kyoto
 kind: district
 facets: ""
-retrieved_at: "2026-09-16T08:21:22+00:00"
+retrieved_at: "2026-09-16T09:57:26+00:00"
 ---
 
-# Wikivoyage: Kyoto/South
+Kyoto/South – Travel guide at Wikivoyage
 
-Kyoto/South
+Main menu
+
+Main menu
+
+move to sidebar
+hide
+
+Navigation
+
+* Main page
+* Travel destinations
+* Star articles
+* What's nearby?
+* Trip planner
+* Travel forum
+* Arrivals lounge
+* Random page
+
+Get involved
+
+* Travellers' pub
+* Recent changes
+* Community portal
+* Maintenance panel
+* Policies
+* Help
+* Interlingual lounge
+
+Search
+
+Search
+
+Appearance
+
+* Donate
+* Create account
+* Log in
+
+Personal tools
+
+* Donate
+* Create account
+* Log in
+
+## Contents
+
+move to sidebar
+hide
+
+* Beginning
+* 1
+  Get in
+
+  Toggle Get in subsection
+  + 1.1
+    By train
+  + 1.2
+    By subway
+  + 1.3
+    By bus
+* 2
+  See
+
+  Toggle See subsection
+  + 2.1
+    Southeast
+  + 2.2
+    Oharano area
+* 3
+  Do
+* 4
+  Buy
+* 5
+  Eat
+* 6
+  Drink
+* 7
+  Sleep
+* 8
+  Connect
+* 9
+  Go next
+
+Toggle the table of contents
+
+2 languages
+
+* Français
+* Italiano
+
+Edit links
+
+* Page
+* Discussion
+
+English
+
+* Read
+* Edit
+* View history
+
+Tools
+
+Tools
+
+move to sidebar
+hide
+
+Actions
+
+* Read
+* Edit
+* View history
+
+General
+
+* What links here
+* Related changes
+* Upload file
+* Permanent link
+* Page information
+* Cite this page
+* Get shortened URL
+* Switch to legacy parser
+
+Print/export
+
+* Create a book
+* Download as PDF
+* Printable version
+
+In other projects
+
+* Wikidata item
+
+Appearance
+
+move to sidebar
+hide
+
+Asia > East Asia > Japan > Kansai > Kyoto (prefecture) > Kyoto > Kyoto/South
+
+# Kyoto/South
+
+## Contents
+
+* 1 Get in
+  + 1.1 By train
+  + 1.2 By subway
+  + 1.3 By bus
+* 2 See
+  + 2.1 Southeast
+  + 2.2 Oharano area
+* 3 Do
+* 4 Buy
+* 5 Eat
+* 6 Drink
+* 7 Sleep
+* 8 Connect
+* 9 Go next
 
 **Southern Kyoto** (洛南) covers a large part of Japan's former capital, stretching from the Ōharano area in the west to Fushimi-ku, Daigo, and the southern tip of Higashiyama-ku in the east. The ancient city of Uji borders the district to the southeast.
 
@@ -88,3 +247,47 @@ Lodging options are limited in this part of the city. More choices can be found 
 * Urban Hotel Kyoto, 4-59 Nishiura-cho, Fukakusa, Fushimi-ku, ☏ +81 75-647-0606. A nice hotel in the heart of the Fushimi area, just a 15 minute walk away from Fushimi Inari Taisha. Prices start from ¥7000 (single). A nice budget option for two people is the semi-double for ¥9000.
 
 ## Connect
+
+Hidden categories:
+
+* UNESCO World Heritage Sites
+* UNESCO tag to be fixed
+* Articles without Wikipedia links (via Wikidata)
+* Has custom banner
+* Has mapframe
+* Has map markers
+* Do listing with no coordinates
+* Eat listing with no coordinates
+* Sleep listing with no coordinates
+* Has routebox
+* Usable districts
+* Usable articles
+* District articles
+* Has Geo parameter
+* Articles with no Wikidata coords
+* Kyoto
+* All destination articles
+* Pages using the Kartographer extension
+
+* This article is partly based on Creative Commons Attribution-ShareAlike 3.0 Licensed work from other websites. Details of contributors can be found in the article history.
+* Page was rendered with Parsoid.
+* Text is available under the Creative Commons Attribution-ShareAlike License; additional terms may apply. By using this site, you agree to the Terms of Use and Privacy Policy.
+
+* Privacy policy
+* About Wikivoyage
+* Disclaimer
+* Legal & safety contacts
+* Code of Conduct
+* Developers
+* Statistics
+* Cookie statement
+
+Search
+
+Search
+
+Toggle the table of contents
+
+2 languages
+
+Add topic

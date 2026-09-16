@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     chunk_size: int = Field(default=900, ge=200)
     chunk_overlap: int = Field(default=120, ge=0)
 
+    # -- Conversations ------------------------------------------------------
+    #: Where conversation history lives.
+    #:   sqlite -- survives a restart, and past conversations can be listed
+    #:   memory -- forgotten when the process exits
+    #: SQLite is the default because an assistant that loses the trip you were
+    #: planning the moment the server restarts is not much of an assistant.
+    conversation_store: Literal["sqlite", "memory"] = "sqlite"
+
     # -- Observability (LangSmith) ------------------------------------------
     #: When on, every agent run is traced to LangSmith: the tool calls, their
     #: arguments and results, and the prompts. That is genuinely useful here
@@ -125,6 +133,11 @@ class Settings(BaseSettings):
     def registry_path(self) -> Path:
         """`sources.json` -- the authority on what is in the knowledge base."""
         return self.kb_dir / "sources.json"
+
+    @property
+    def conversation_db(self) -> Path:
+        """SQLite file holding conversation checkpoints."""
+        return PROJECT_ROOT / "data" / "conversations.sqlite3"
 
     @property
     def manifest_path(self) -> Path:

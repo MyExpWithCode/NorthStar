@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
@@ -33,6 +33,42 @@ logger = logging.getLogger(__name__)
 #: reported by /health and by a clear error on /chat rather than a stack trace.
 _agent: agent_module.TravelAgent | None = None
 _startup_error: str | None = None
+#: Keeps the SQLite checkpointer's connection open for the process lifetime.
+_resources = AsyncExitStack()
+
+
+async def _make_checkpointer():
+    """Conversation store for the agent.
+
+    SQLite by default so a conversation survives a restart. `from_conn_string`
+    is an async context manager, so it is entered on the process-wide exit
+    stack rather than with `async with` -- the connection has to outlive this
+    function. If it cannot be opened, fall back to memory and say so: losing
+    history is much better than refusing to start.
+    """
+    if settings.conversation_store == "memory":
+        from langgraph.checkpoint.memory import InMemorySaver
+
+        logger.info("Conversations are in memory and will not survive a restart")
+        return InMemorySaver()
+
+    try:
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+        settings.conversation_db.parent.mkdir(parents=True, exist_ok=True)
+        saver = await _resources.enter_async_context(
+            AsyncSqliteSaver.from_conn_string(str(settings.conversation_db))
+        )
+        logger.info("Conversations persisted to %s", settings.conversation_db)
+        return saver
+    except Exception as exc:
+        from langgraph.checkpoint.memory import InMemorySaver
+
+        logger.warning(
+            "Could not open the conversation database (%s); falling back to "
+            "in-memory history for this run", exc
+        )
+        return InMemorySaver()
 
 
 @asynccontextmanager
@@ -71,7 +107,7 @@ async def lifespan(app: FastAPI):
         )
 
     try:
-        _agent = await agent_module.build_agent()
+        _agent = await agent_module.build_agent(await _make_checkpointer())
         logger.info("Agent ready: %s", _agent.describe())
     except Exception as exc:
         _startup_error = f"{type(exc).__name__}: {exc}"
@@ -80,6 +116,7 @@ async def lifespan(app: FastAPI):
     yield
 
     _agent = None
+    await _resources.aclose()
 
 
 app = FastAPI(
@@ -116,6 +153,13 @@ class ResetRequest(BaseModel):
 
 class UrlRequest(BaseModel):
     url: str = Field(min_length=1, max_length=2000)
+
+
+class UpdateSourceRequest(BaseModel):
+    """Fields a user may correct on an existing source. Omitted means unchanged."""
+
+    destination: str | None = Field(default=None, max_length=120)
+    title: str | None = Field(default=None, max_length=300)
 
 
 class ConfirmRequest(BaseModel):
@@ -164,9 +208,22 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
 @app.post("/reset")
 async def reset(request: ResetRequest) -> dict:
-    """Forget one conversation."""
-    agent_module.reset(_require_agent(), request.session_id)
+    """Forget one conversation, in the store as well as in memory."""
+    await agent_module.reset(_require_agent(), request.session_id)
     return {"session_id": request.session_id, "reset": True}
+
+
+@app.get("/conversations")
+async def conversations(limit: int = 40) -> dict:
+    """Past conversations, newest first, so one can be resumed."""
+    travel_agent = _require_agent()
+    return {
+        "conversations": await agent_module.list_conversations(
+            travel_agent, limit=max(1, min(limit, 200))
+        ),
+        "store": settings.conversation_store,
+        "persistent": settings.conversation_store == "sqlite",
+    }
 
 
 @app.get("/history/{session_id}")
@@ -190,6 +247,15 @@ async def health() -> dict:
             dotenv_keys_shadowed_by_environment()
         ),
         "llm": llm.describe(),
+        "conversations": {
+            "store": settings.conversation_store,
+            "persistent": settings.conversation_store == "sqlite",
+            "database": (
+                str(settings.conversation_db)
+                if settings.conversation_store == "sqlite"
+                else None
+            ),
+        },
         "tracing": observability.describe(),
         "knowledge_base": {
             "ready": index["ready"],
@@ -266,6 +332,33 @@ async def admin_confirm(request: ConfirmRequest) -> dict:
         publisher=request.publisher,
         source_url=request.source_url,
     )
+
+
+@app.patch("/admin/sources/{source_id}")
+async def admin_update_source(
+    source_id: str, request: UpdateSourceRequest
+) -> dict:
+    """Correct a source's destination and/or title, then re-index."""
+    if request.destination is None and request.title is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide a destination, a title, or both.",
+        )
+    return ingestion.update_source(
+        source_id, destination=request.destination, title=request.title
+    )
+
+
+@app.post("/admin/sources/{source_id}/refresh")
+async def admin_refresh_source(source_id: str) -> dict:
+    """Re-fetch one document from its source URL, then re-index."""
+    return ingestion.refresh_source(source_id)
+
+
+@app.post("/admin/destinations/{destination}/refresh")
+async def admin_refresh_destination(destination: str) -> dict:
+    """Re-fetch every URL-backed document for one place, then re-index once."""
+    return ingestion.refresh_destination(destination)
 
 
 @app.delete("/admin/sources/{source_id}")

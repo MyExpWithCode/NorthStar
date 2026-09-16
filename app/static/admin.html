@@ -97,6 +97,17 @@
   .stat .v { font-size: 19px; font-family: var(--mono); }
 
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  /* Narrow screens scroll the table instead of clipping the action column. */
+  .tablewrap { overflow-x: auto; }
+  .tablewrap table { min-width: 860px; }
+  #sources td, #sources th { vertical-align: middle; }
+  #sources col.doc   { width: 30%; }
+  #sources col.dest  { width: 18%; }
+  #sources col.orig  { width: 80px; }
+  #sources col.lic   { width: 130px; }
+  #sources col.chunk { width: 72px; }
+  #sources col.fetch { width: 96px; }
+  #sources col.acts  { width: 160px; }
   th, td {
     text-align: left; padding: 9px 11px;
     border-bottom: 1px solid var(--line-soft);
@@ -117,15 +128,39 @@
   .tag.curated { color: var(--ok); } .tag.upload { color: var(--accent); }
   .tag.url { color: var(--accent); }
   .state-unavailable, .state-missing { color: var(--warn); }
+  tr.unassigned td { background: rgba(251,191,36,.045); }
+  .age { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
+  .age.stale { color: var(--warn); }
+  .rowacts {
+    display: flex; gap: 5px; justify-content: flex-end; flex-wrap: wrap;
+  }
+  .rowacts button { padding: 4px 9px; font-size: 12px; white-space: nowrap; }
+  .warnbox {
+    background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.35);
+    border-radius: 9px; padding: 9px 12px; color: #ffe4b0; font-size: 12.5px;
+  }
+  .assign { display: flex; gap: 5px; align-items: center; }
+  .assign { width: 100%; }
+  .assign input {
+    min-width: 0; width: 100%; padding: 5px 8px; font-size: 12.5px;
+    border-radius: 7px;
+  }
+  .assign button { padding: 4px 9px; font-size: 12px; }
   .src-title { font-weight: 500; }
   .src-title a { color: var(--accent); text-decoration: none; }
   .note { color: var(--text-dim); font-size: 12px; }
 
   .row { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
   input[type=text], input[type=url] {
-    flex: 1; min-width: 240px; background: var(--bg-soft); color: var(--text);
+    background: var(--bg-soft); color: var(--text);
     border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px;
     font: inherit; transition: border-color .14s ease;
+  }
+  /* Only the add-a-source and preview forms want a wide, growing field. In a
+     table the same rule forces every column open and pushes the actions past
+     the right edge. */
+  .row > input[type=text], .row > input[type=url], .field > input[type=text] {
+    flex: 1; min-width: 240px;
   }
   input:focus { outline: none; border-color: var(--accent); }
   #drop {
@@ -146,10 +181,101 @@
   .field label { font-size: 11px; text-transform: uppercase; color: var(--text-dim); }
 
   #jobs { display: none; }
+
+  /* The log is a list of lines. Without an explicit white-space rule the
+     newlines collapse and every stage runs into the next, which is what it
+     was doing. */
   .joblog {
     font-family: var(--mono); font-size: 12px; color: var(--text-dim);
-    background: #0b0f14; border: 1px solid var(--line); border-radius: 6px;
-    padding: 10px; max-height: 190px; overflow: auto;
+    background: #0b0f14; border: 1px solid var(--line-soft);
+    border-radius: 9px; padding: 10px 12px; max-height: 190px;
+    overflow: auto; white-space: pre-wrap; line-height: 1.75;
+  }
+  .joblog .ln { display: block; }
+  .joblog .ln::before {
+    content: "› "; color: var(--text-faint);
+  }
+  .joblog .ln.last { color: var(--text); }
+  .joblog .ln.err::before { content: "× "; color: var(--err); }
+  .joblog .ln.err { color: var(--err); }
+
+  /* Stage stepper -- honest about where the pipeline is, without inventing a
+     percentage for a step that reports no progress. */
+  .steps { display: flex; align-items: flex-start; gap: 0; margin: 4px 0 14px; }
+  .step { flex: 1; text-align: center; position: relative; }
+  .step .bead {
+    width: 20px; height: 20px; margin: 0 auto 7px; border-radius: 50%;
+    background: var(--bg-soft); border: 1.5px solid var(--line);
+    display: grid; place-items: center; font-size: 10px;
+    color: var(--text-faint); position: relative; z-index: 2;
+    transition: .2s ease;
+  }
+  .step .name {
+    font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  .step::before {
+    content: ""; position: absolute; top: 9px; left: 0; right: 50%;
+    height: 2px; background: var(--line); z-index: 1;
+  }
+  .step::after {
+    content: ""; position: absolute; top: 9px; left: 50%; right: 0;
+    height: 2px; background: var(--line); z-index: 1;
+  }
+  .step:first-child::before, .step:last-child::after { display: none; }
+  .step.done .bead {
+    background: var(--ok); border-color: var(--ok); color: #05130a;
+  }
+  .step.done::before, .step.done::after { background: var(--ok); }
+  .step.now .bead {
+    border-color: var(--accent); color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(76,141,255,.14);
+    animation: beat 1.2s ease-in-out infinite;
+  }
+  .step.now::before { background: var(--ok); }
+  .step.now .name { color: var(--text); }
+  .step.failed .bead {
+    background: var(--err); border-color: var(--err); color: #1b0509;
+  }
+  .step.failed .name { color: var(--err); }
+  @keyframes beat {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(76,141,255,.14); }
+    50%      { box-shadow: 0 0 0 7px rgba(76,141,255,.05); }
+  }
+
+  .track {
+    height: 4px; border-radius: 3px; background: var(--line-soft);
+    overflow: hidden; margin-bottom: 12px;
+  }
+  .track > i { display: block; height: 100%; border-radius: 3px; }
+  .track > i.moving {
+    width: 38%;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: slide 1.25s ease-in-out infinite;
+  }
+  .track > i.full { width: 100%; background: var(--ok); }
+  .track > i.stopped { width: 100%; background: var(--err); }
+  @keyframes slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(300%); }
+  }
+
+  .jobhead {
+    display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+    margin-bottom: 11px;
+  }
+  .pill.running   { color: var(--accent); border-color: #2c4a7d; }
+  .pill.succeeded { color: var(--ok); border-color: #235437; }
+  .pill.failed    { color: var(--err); border-color: #5a2430; }
+  .pill.queued    { color: var(--text-dim); }
+  .jobhead .elapsed {
+    font-family: var(--mono); font-size: 11.5px; color: var(--text-faint);
+    margin-left: auto;
+  }
+  .result { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 11px; }
+  .result span {
+    font-size: 11px; font-family: var(--mono); color: var(--ok);
+    border: 1px solid #235437; border-radius: 999px; padding: 2px 9px;
   }
   .pill {
     font-family: var(--mono); font-size: 11.5px;
@@ -208,13 +334,14 @@
         documents is refused and the covered list named, rather than answered
         from another place's guide.
       </p>
-      <table>
+      <p class="note" id="unassignedWarn" style="display:none"></p>
+      <div class="tablewrap"><table>
         <thead><tr>
           <th>Destination</th><th class="num">Documents</th>
           <th class="num">Chunks</th><th>Document kinds</th><th></th>
         </tr></thead>
         <tbody id="destinations"><tr><td colspan="5" class="note">loading…</td></tr></tbody>
-      </table>
+      </table></div>
       <p class="note" style="margin-bottom:0">
         Add a destination from the command line — it discovers that place's
         Wikivoyage guide and district pages automatically:<br>
@@ -226,22 +353,32 @@
   <section id="jobs">
     <h2>Rebuild job</h2>
     <div class="body">
-      <p><span id="jobId" class="pill"></span>
-         <span id="jobState" class="pill"></span>
-         <span id="jobStage" class="note"></span></p>
+      <div class="jobhead">
+        <span id="jobId" class="pill"></span>
+        <span id="jobState" class="pill"></span>
+        <span id="jobStage" class="note"></span>
+        <span id="jobElapsed" class="elapsed"></span>
+      </div>
+      <div class="steps" id="jobSteps"></div>
+      <div class="track"><i id="jobTrack"></i></div>
+      <div class="result" id="jobResult"></div>
       <div class="joblog" id="jobLog"></div>
     </div>
   </section>
 
   <section>
     <h2>Sources</h2>
-    <div class="body" style="padding:0">
+    <div class="body tablewrap" style="padding:0">
       <table>
+        <colgroup>
+          <col class="doc"><col class="dest"><col class="orig"><col class="lic">
+          <col class="chunk"><col class="fetch"><col class="acts">
+        </colgroup>
         <thead><tr>
           <th>Document</th><th>Destination</th><th>Origin</th><th>Licence</th>
-          <th class="num">Chunks</th><th></th>
+          <th class="num">Chunks</th><th>Fetched</th><th></th>
         </tr></thead>
-        <tbody id="sources"><tr><td colspan="6" class="note" style="padding:16px">
+        <tbody id="sources"><tr><td colspan="7" class="note" style="padding:16px">
           loading…</td></tr></tbody>
       </table>
     </div>
@@ -277,7 +414,7 @@
         <div class="field"><label for="pDestination">Destination</label>
           <input type="text" id="pDestination" list="destinationOptions"
                  placeholder="leave blank if not place-specific">
-          <datalist id="destinationOptions"></datalist></div>
+          </div>
         <div class="field"><label for="pLicence">Licence</label>
           <input type="text" id="pLicence"></div>
         <div class="field"><label for="pPublisher">Publisher</label>
@@ -296,6 +433,7 @@
   </footer>
 </main>
 
+<datalist id="destinationOptions"></datalist>
 <div id="toast"></div>
 
 <script>
@@ -331,7 +469,8 @@ async function api(path, options) {
 function setBusy(busy) {
   jobRunning = busy;
   $("rebuild").disabled = busy;
-  document.querySelectorAll("[data-remove-destination]")
+  document.querySelectorAll("[data-remove-destination], [data-refresh],"
+    + " [data-refresh-destination], [data-assign]")
     .forEach((b) => { b.disabled = busy; });
   $("confirm").disabled = busy;
   $("fetchUrl").disabled = busy;
@@ -356,7 +495,6 @@ function renderStats(status) {
 
 function renderSources(status) {
   const rows = (status.sources || []).map((s) => {
-    const removable = s.origin !== "curated";
     const link = s.source_url && s.source_url.startsWith("http")
       ? `<a href="${escapeHtml(s.source_url)}" target="_blank" rel="noopener">${escapeHtml(s.source_title)}</a>`
       : escapeHtml(s.source_title);
@@ -365,19 +503,69 @@ function renderSources(status) {
            s.note ? ": " + escapeHtml(s.note.slice(0, 90)) : ""}</div>`
       : "";
     return `<tr>
-      <td><div class="src-title">${link}</div>${state}</td>
-      <td class="note">${escapeHtml(s.destination || "—")}</td>
+      <td>
+        ${s.origin === "curated"
+          ? `<div class="src-title">${link}</div>`
+          : `<span class="assign">
+               <input type="text" value="${escapeHtml(s.source_title)}"
+                 data-title-for="${escapeHtml(s.source_id)}">
+             </span>
+             <div class="note" style="margin-top:3px">${link}</div>`}
+        ${state}</td>
+      <td>${s.origin === "curated"
+        ? `<span class="note">${escapeHtml(s.destination || "—")}</span>`
+        : `<span class="assign">
+             <input type="text" list="destinationOptions"
+               value="${escapeHtml(s.destination || "")}"
+               placeholder="unassigned"
+               data-dest-for="${escapeHtml(s.source_id)}">
+             <button type="button"
+               data-assign="${escapeHtml(s.source_id)}">Save</button>
+           </span>`}</td>
       <td><span class="tag ${escapeHtml(s.origin)}">${escapeHtml(s.origin)}</span></td>
-      <td class="note">${escapeHtml(s.license)}</td>
+      <td class="note" style="white-space:nowrap">${escapeHtml(s.license)}</td>
       <td class="num">${(s.chunk_count ?? 0).toLocaleString()}</td>
-      <td>${removable
-        ? `<button class="danger" type="button" data-remove="${escapeHtml(s.source_id)}">Remove</button>`
-        : `<span class="note" title="Shipped with the project">shipped</span>`}</td>
+      <td>${fetchedCell(s)}</td>
+      <td><div class="rowacts">
+        ${s.origin === "upload"
+          ? `<span class="note" title="No URL to re-read">—</span>`
+          : `<button type="button" data-refresh="${escapeHtml(s.source_id)}"
+               title="Re-fetch from the source URL">Refresh</button>`}
+        <button class="danger" type="button"
+          data-remove="${escapeHtml(s.source_id)}">Remove</button>
+      </div></td>
     </tr>`;
   }).join("");
   $("sources").innerHTML = rows ||
-    `<tr><td colspan="6" class="note" style="padding:16px">No sources.
+    `<tr><td colspan="7" class="note" style="padding:16px">No sources.
       Run <code>python -m app.ingest.fetch_sources</code> or add one below.</td></tr>`;
+}
+
+/* Show how old a document is, not just that it exists. Wikivoyage and
+   Wikipedia change constantly, and a stale citation is worse than a missing
+   one because it still reads as authoritative. */
+const STALE_AFTER_DAYS = 30;
+
+function fetchedCell(s) {
+  if (!s.retrieved_at) return `<span class="age">—</span>`;
+  const when = new Date(s.retrieved_at);
+  const days = Math.floor((Date.now() - when.getTime()) / 86400000);
+  const label = days <= 0 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`;
+  return `<span class="age ${days >= STALE_AFTER_DAYS ? "stale" : ""}"
+    title="${escapeHtml(s.retrieved_at)}">${label}</span>`;
+}
+
+function renderUnassigned(status) {
+  const stray = status.unassigned || [];
+  const box = $("unassignedWarn");
+  if (!stray.length) { box.style.display = "none"; return; }
+  box.style.display = "block";
+  box.className = "note warnbox";
+  box.innerHTML = `⚠ <strong>${stray.length} document${
+    stray.length === 1 ? "" : "s"} have no destination</strong>, so a
+    destination-scoped search can never return them — they are indexed but
+    unreachable. Set a destination in the Sources table below:
+    ${stray.map((r) => `<code>${escapeHtml(r.source_title)}</code>`).join(", ")}.`;
 }
 
 function renderDestinations(status) {
@@ -387,8 +575,12 @@ function renderDestinations(status) {
       <td class="num">${d.document_count}</td>
       <td class="num">${(d.chunk_count ?? 0).toLocaleString()}</td>
       <td class="note">${(d.kinds || []).map(escapeHtml).join(", ")}</td>
-      <td><button class="danger" type="button"
-            data-remove-destination="${escapeHtml(d.destination)}">Remove all</button></td>
+      <td><div class="rowacts">
+        <button type="button" data-refresh-destination="${escapeHtml(d.destination)}"
+          title="Re-fetch every URL-backed document for this place">Refresh all</button>
+        <button class="danger" type="button"
+          data-remove-destination="${escapeHtml(d.destination)}">Remove all</button>
+      </div></td>
     </tr>`).join("");
   $("destinations").innerHTML = rows ||
     `<tr><td colspan="5" class="note">No destinations indexed.</td></tr>`;
@@ -399,7 +591,11 @@ async function refresh() {
     const status = await api("/admin/status");
     renderStats(status);
     renderDestinations(status);
+    renderUnassigned(status);
     renderSources(status);
+    $("destinationOptions").innerHTML = (status.destinations || [])
+      .map((d) => `<option value="${escapeHtml(d.destination)}"></option>`)
+      .join("");
     $("dropTypes").textContent =
       `${(status.supported_uploads || []).join("  ")} · up to ${status.max_upload_mb} MB`;
     if (status.active_job && ["queued", "running"].includes(status.active_job.state)) {
@@ -410,13 +606,82 @@ async function refresh() {
   }
 }
 
+/* The service reports a stage as free text ("embedding 1294 chunks"), so the
+   pipeline position is matched by keyword. No percentage is invented for a
+   stage that does not report progress -- the bar animates while work is
+   happening and fills only when it is genuinely done. */
+const JOB_STAGES = [
+  { name: "Queued",   match: /queued/i },
+  { name: "Chunking", match: /chunk/i },
+  { name: "Embedding", match: /embed/i },
+  { name: "Writing",  match: /writ/i },
+  { name: "Swapping", match: /swap/i },
+  { name: "Done",     match: /done/i },
+];
+
+function stageIndex(job) {
+  const text = job.stage || "";
+  for (let i = JOB_STAGES.length - 1; i >= 0; i--) {
+    if (JOB_STAGES[i].match.test(text)) return i;
+  }
+  return 0;
+}
+
+function renderSteps(job) {
+  const failed = job.state === "failed";
+  const finished = job.state === "succeeded";
+  const at = finished ? JOB_STAGES.length - 1 : stageIndex(job);
+  $("jobSteps").innerHTML = JOB_STAGES.map((s, i) => {
+    let cls = "";
+    if (failed && i === at) cls = "failed";
+    else if (i < at || (finished && i <= at)) cls = "done";
+    else if (i === at) cls = "now";
+    const glyph = cls === "done" ? "✓" : cls === "failed" ? "×" : i + 1;
+    return `<div class="step ${cls}"><div class="bead">${glyph}</div>`
+      + `<div class="name">${esc(s.name)}</div></div>`;
+  }).join("");
+
+  const track = $("jobTrack");
+  track.className = job.state === "failed" ? "stopped"
+    : job.state === "succeeded" ? "full" : "moving";
+}
+
+function renderResult(job) {
+  const r = job.result;
+  if (!r || job.state !== "succeeded") { $("jobResult").innerHTML = ""; return; }
+  $("jobResult").innerHTML = [
+    `${(r.chunk_count || 0).toLocaleString()} chunks`,
+    `${r.source_count} sources`,
+    `${r.dimension}-dim`,
+    esc(r.embedding_model || ""),
+  ].filter(Boolean).map((t) => `<span>${t}</span>`).join("");
+}
+
 function renderJob(job) {
   $("jobs").style.display = "block";
   $("jobId").textContent = job.job_id;
   $("jobState").textContent = job.state;
   $("jobState").className = "pill " + job.state;
   $("jobStage").textContent = job.error ? job.error : job.stage;
-  $("jobLog").textContent = (job.log || []).join("\n");
+
+  if (job.started_at) {
+    const started = new Date(job.started_at);
+    const until = job.finished_at ? new Date(job.finished_at) : new Date();
+    const secs = Math.max(0, Math.round((until - started) / 1000));
+    $("jobElapsed").textContent =
+      (job.finished_at ? "took " : "") + secs + "s";
+  }
+
+  renderSteps(job);
+  renderResult(job);
+
+  const lines = job.log || [];
+  $("jobLog").innerHTML = lines.map((line, i) => {
+    const bad = /fail|error/i.test(line);
+    const last = i === lines.length - 1 && job.state === "running";
+    return `<span class="ln ${bad ? "err" : ""} ${last ? "last" : ""}">`
+      + `${esc(line)}</span>`;
+  }).join("");
   $("jobLog").scrollTop = $("jobLog").scrollHeight;
 }
 
@@ -451,8 +716,6 @@ function showPreview(preview) {
   $("pHeadings").textContent = preview.heading_count ?? 0;
   $("pTitle").value = preview.title || "";
   $("pDestination").value = "";
-  $("destinationOptions").innerHTML = (preview.known_destinations || [])
-    .map((d) => `<option value="${escapeHtml(d)}"></option>`).join("");
   $("pLicence").value = preview.suggested_license || "";
   $("pPublisher").value = preview.origin === "upload" ? "User supplied" : "";
   $("pWarnings").innerHTML = (preview.warnings || [])
@@ -547,6 +810,24 @@ $("rebuild").addEventListener("click", async () => {
 });
 
 $("destinations").addEventListener("click", async (event) => {
+  const refreshPlace = event.target.dataset?.refreshDestination;
+  if (refreshPlace) {
+    toast(`Re-fetching every document for ${refreshPlace}…`);
+    try {
+      const result = await api(
+        `/admin/destinations/${encodeURIComponent(refreshPlace)}/refresh`,
+        { method: "POST" });
+      const failed = (result.failed || []).length;
+      toast(`${result.refreshed.length} document(s) refreshed for `
+        + `${result.destination}${failed ? `, ${failed} failed` : ""}.`, failed > 0);
+      if (result.job) trackJob(result.job.job_id);
+      refresh();
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
+
   const place = event.target.dataset?.removeDestination;
   if (!place) return;
   if (!confirm(`Remove every document for "${place}"?
@@ -567,10 +848,52 @@ The index is rebuilt `
 });
 
 $("sources").addEventListener("click", async (event) => {
+  const refreshId = event.target.dataset?.refresh;
+  if (refreshId) {
+    toast(`Re-fetching ${refreshId}…`);
+    try {
+      const result = await api(
+        `/admin/sources/${encodeURIComponent(refreshId)}/refresh`,
+        { method: "POST" });
+      const delta = result.chars_delta;
+      toast(`${result.source_id} refreshed: ${result.chars.toLocaleString()} `
+        + `chars (${delta >= 0 ? "+" : ""}${delta.toLocaleString()}). Rebuilding…`);
+      if (result.job) trackJob(result.job.job_id);
+      refresh();
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
+
+  const assignId = event.target.dataset?.assign;
+  if (assignId) {
+    const destField = document.querySelector(`[data-dest-for="${assignId}"]`);
+    const titleField = document.querySelector(`[data-title-for="${assignId}"]`);
+    const place = (destField?.value || "").trim();
+    const title = (titleField?.value || "").trim();
+    try {
+      const result = await api(`/admin/sources/${encodeURIComponent(assignId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ destination: place, title: title || null }),
+      });
+      toast(place
+        ? `${result.source_id} → ${result.destination}. Rebuilding…`
+        : `${result.source_id} is now unassigned. Rebuilding…`);
+      if (result.job) trackJob(result.job.job_id);
+      refresh();
+    } catch (error) {
+      toast(error.message, true);
+    }
+    return;
+  }
+
   const sourceId = event.target.dataset?.remove;
   if (!sourceId) return;
   if (!confirm(`Remove "${sourceId}"?\n\nIts document, registry entry and `
-    + `chunks are all deleted, and the index is rebuilt.`)) return;
+    + `chunks are all deleted, and the index is rebuilt.\n\nIf it is one of `
+    + `the shipped documents, re-running fetch_sources brings it back.`)) return;
   try {
     const result = await api(`/admin/sources/${encodeURIComponent(sourceId)}`,
                              { method: "DELETE" });

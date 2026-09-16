@@ -1,15 +1,15 @@
 {
   "version": 2,
-  "updated_at": "2026-09-16T09:41:22+00:00",
+  "updated_at": "2026-09-16T10:07:24+00:00",
   "sources": [
     {
       "source_id": "url-contents",
-      "source_title": "Contents",
+      "source_title": "Andhra Pradesh",
       "source_url": "https://en.wikipedia.org/wiki/Tourism_in_Andhra_Pradesh",
       "publisher": "User supplied",
       "license": "unknown",
       "origin": "url",
-      "destination": "",
+      "destination": "Andhra Pradesh",
       "kind": "user",
       "facets": [],
       "doc_path": "data/kb/url-contents.md",
@@ -115,9 +115,9 @@
       "kind": "district",
       "facets": [],
       "doc_path": "data/kb/wikivoyage-kyoto-south.md",
-      "retrieved_at": "2026-09-16T08:21:22+00:00",
+      "retrieved_at": "2026-09-16T09:57:26+00:00",
       "committed": true,
-      "chunk_count": 23,
+      "chunk_count": 27,
       "state": "available",
       "note": null
     },

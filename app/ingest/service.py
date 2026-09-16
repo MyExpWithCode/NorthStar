@@ -42,6 +42,7 @@ from app.ingest.registry import (
     SourceRecord,
     SourceRegistry,
     relative_doc_path,
+    transaction as registry_transaction,
     utc_now_iso,
 )
 
@@ -130,6 +131,7 @@ class IngestionService:
             "index_ready": manifest is not None,
             "sources": [record.model_dump() for record in registry.sources],
             "destinations": [d.model_dump() for d in registry.destinations()],
+            "unassigned": [r.model_dump() for r in registry.unassigned()],
             "source_count": len(registry.available()),
             "total_chunks": registry.total_chunks(),
             "active_job": active.as_dict() if active else None,
@@ -305,13 +307,209 @@ class IngestionService:
         with self._lock:
             self._previews.pop(preview_token, None)
 
-    # -- remove ------------------------------------------------------------
-    def remove_source(self, source_id: str, *, rebuild: bool = True) -> dict:
+    def update_source(
+        self,
+        source_id: str,
+        *,
+        destination: str | None = None,
+        title: str | None = None,
+        rebuild: bool = True,
+    ) -> dict:
+        """Correct a source's destination and/or title, then re-index."""
+        with registry_transaction() as registry:
+            try:
+                record = registry.update_source(
+                    source_id, destination=destination, title=title
+                )
+            except KeyError:
+                raise IngestionError(
+                    f"No source with id {source_id!r}."
+                ) from None
+        logger.info(
+            "Source %s updated: destination=%r title=%r",
+            source_id, record.destination, record.source_title,
+        )
+
+        response = {
+            "source_id": source_id,
+            "destination": record.destination,
+            "title": record.source_title,
+            "job": None,
+        }
+        if rebuild:
+            response["job"] = self.start_rebuild(reason=f"updated {source_id}")
+        return response
+
+    def assign_destination(
+        self, source_id: str, destination: str, *, rebuild: bool = True
+    ) -> dict:
+        """Set or change a source's destination and re-index.
+
+        Needed because the destination is what makes a document reachable: a
+        blank one is easy to leave by accident on upload, and without this the
+        only fix would be to delete the document and add it again.
+        """
+        with registry_transaction() as registry:
+            try:
+                record = registry.set_destination(source_id, destination)
+            except KeyError:
+                raise IngestionError(
+                    f"No source with id {source_id!r}."
+                ) from None
+        logger.info(
+            "Source %s assigned to destination %r", source_id, record.destination
+        )
+
+        response = {
+            "source_id": source_id,
+            "destination": record.destination,
+            "job": None,
+        }
+        if rebuild:
+            response["job"] = self.start_rebuild(
+                reason=f"reassigned {source_id}"
+            )
+        return response
+
+    # -- refresh -----------------------------------------------------------
+    def refresh_source(self, source_id: str, *, rebuild: bool = True) -> dict:
+        """Re-fetch one document from its source URL and replace its content.
+
+        Identity is preserved -- id, destination, kind, facets, licence and
+        publisher all stay as they were -- so a refresh updates the text
+        without disturbing how the document is classified or cited. Only
+        `retrieved_at` moves.
+
+        Uploads cannot be refreshed: there is no URL to re-read, and silently
+        leaving them untouched would misreport what happened, so it raises.
+        """
+        from app.ingest.fetch_sources import (
+            CURATED_SOURCES,
+            SourceUnavailable,
+            _http_get,
+            fetch_wikimedia,
+            html_to_markdown,
+        )
+
         registry = SourceRegistry.load()
-        record = registry.remove(source_id, delete_document=True)
+        record = registry.get(source_id)
         if record is None:
             raise IngestionError(f"No source with id {source_id!r}.")
+        if record.origin == "upload":
+            raise IngestionError(
+                f"{record.source_title!r} was uploaded, so there is no URL to "
+                "re-read. Upload the new version instead."
+            )
+
+        # A curated source knows how to fetch itself, including which sections
+        # to drop; reusing that keeps a refresh identical to the original fetch.
+        curated = next(
+            (c for c in CURATED_SOURCES if c.source_id == source_id), None
+        )
+        try:
+            if curated is not None:
+                markdown = fetch_wikimedia(curated)
+            else:
+                markdown = html_to_markdown(_http_get(record.source_url))
+        except (SourceUnavailable, Exception) as exc:
+            raise IngestionError(
+                f"Could not re-fetch {record.source_url}: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+
+        path = record.resolved_path
+        previous = len(
+            frontmatter.loads(path.read_text(encoding="utf-8"))[1]
+        ) if path and path.is_file() else 0
+
+        retrieved_at = utc_now_iso()
+        metadata = {
+            "source_id": record.source_id,
+            "source_title": record.source_title,
+            "source_url": record.source_url,
+            "publisher": record.publisher,
+            "license": record.license,
+            "origin": record.origin,
+            "destination": record.destination,
+            "kind": record.kind,
+            "facets": ",".join(record.facets),
+            "retrieved_at": retrieved_at,
+        }
+        body = markdown
+        if curated is not None:
+            body = f"# {record.source_title}\n\n{markdown}"
+
+        path = path or (settings.kb_dir / f"{source_id}.md")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(frontmatter.dumps(metadata, body), encoding="utf-8")
+
+        record.retrieved_at = retrieved_at
+        record.doc_path = relative_doc_path(path)
+        record.state = "available"
+        record.note = None
         registry.save()
+
+        delta = len(body) - previous
+        logger.info(
+            "Refreshed %s: %d chars (%+d)", source_id, len(body), delta
+        )
+        response = {
+            "source_id": source_id,
+            "retrieved_at": retrieved_at,
+            "chars": len(body),
+            "chars_delta": delta,
+            "job": None,
+        }
+        if rebuild:
+            response["job"] = self.start_rebuild(reason=f"refreshed {source_id}")
+        return response
+
+    def refresh_destination(self, destination: str) -> dict:
+        """Re-fetch every URL-backed document for one place.
+
+        One rebuild at the end rather than one per document, which is the whole
+        reason this is a separate operation.
+        """
+        registry = SourceRegistry.load()
+        resolved = registry.resolve_destination(destination)
+        if resolved is None:
+            raise IngestionError(
+                f"No destination called {destination!r} in the knowledge base."
+            )
+
+        targets = [
+            r.source_id for r in registry.available()
+            if r.destination == resolved and r.origin != "upload"
+        ]
+        refreshed: list[str] = []
+        failed: list[dict] = []
+        for source_id in targets:
+            try:
+                self.refresh_source(source_id, rebuild=False)
+                refreshed.append(source_id)
+            except IngestionError as exc:
+                # One dead page must not abandon the rest half-refreshed.
+                failed.append({"source_id": source_id, "error": str(exc)})
+                logger.warning("Refresh failed for %s: %s", source_id, exc)
+
+        response = {
+            "destination": resolved,
+            "refreshed": refreshed,
+            "failed": failed,
+            "job": None,
+        }
+        if refreshed:
+            response["job"] = self.start_rebuild(
+                reason=f"refreshed {resolved}"
+            )
+        return response
+
+    # -- remove ------------------------------------------------------------
+    def remove_source(self, source_id: str, *, rebuild: bool = True) -> dict:
+        with registry_transaction() as registry:
+            record = registry.remove(source_id, delete_document=True)
+            if record is None:
+                raise IngestionError(f"No source with id {source_id!r}.")
         logger.info("Removed source %s", source_id)
 
         response = {"removed": source_id, "job": None}
