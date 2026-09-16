@@ -411,6 +411,47 @@ flowchart LR
     ANSWER --> PANELS["Collapsible panels:<br/>KB sources / MCP tool calls"]
 ```
 
+### 6.1 Calibrating "not in the knowledge base" — measured, not assumed
+
+The design above implies a relevance threshold decides when the knowledge base cannot answer. Measuring
+it showed **a threshold alone cannot**, and the architecture has to say so honestly.
+
+Top cosine-similarity score for the first retrieved chunk, measured against the built index:
+
+| Question | Top score | Verdict |
+|---|---|---|
+| Do I need a visa to enter Singapore? | 0.863 | in scope |
+| Where can I eat hawker food? | 0.776 | in scope |
+| What are the must-visit attractions in Singapore? | 0.770 | in scope |
+| How can a tourist travel around Singapore? | 0.752 | in scope |
+| Create a three-day sightseeing itinerary. | 0.728 | in scope |
+| **What are the best ski resorts in Singapore?** | **0.713** | **out of scope** |
+| What indoor attractions can I visit? | 0.696 | in scope |
+| Which neighbourhoods suit cultural experiences? | 0.670 | in scope |
+| Best surf beaches in Portugal | 0.628 | out of scope |
+| Suggest activities for a family with children. | 0.622 | in scope |
+| How do I file my US federal tax return? | 0.560 | out of scope |
+| What is the capital of Peru? | 0.557 | out of scope |
+| Explain the Riemann hypothesis. | 0.485 | out of scope |
+
+In-scope questions span **0.622–0.863**; out-of-scope span **0.485–0.713**. **The ranges overlap.**
+"Best ski resorts in Singapore" outscores a perfectly legitimate question about family activities,
+because the embedding rewards the shared words "Singapore" and "resorts" — Sentosa's resorts and beaches
+are in the corpus, skiing is not.
+
+So the guard is **two layers**, and neither is sufficient alone:
+
+1. **Retrieval floor (coarse, mechanical).** `relevance_floor = 0.60`, chosen from the table above:
+   it rejects the clearly-unrelated tail without rejecting any real travel question. Below it the KB tool
+   returns `NO_RELEVANT_CONTENT` and never shows the model weak chunks it might rationalise from.
+2. **Prompt-level grounding (fine, semantic).** Above the floor, only the model can judge whether the
+   retrieved text actually *answers* the question. The KB tool therefore returns each excerpt **with its
+   score**, and the system prompt requires the assistant to state plainly when retrieved passages do not
+   contain the answer. This is the layer that correctly refuses the ski-resort question.
+
+Claiming layer 1 does the whole job would be the kind of unsupported confidence this assistant is
+supposed to avoid.
+
 Degradation is a **first-class design requirement**, not error handling bolted on afterwards. An
 assistant that invents a forecast when Open-Meteo is unreachable is worse than one that says it cannot
 reach the weather service. Every MCP tool therefore returns a uniform success/failure envelope rather

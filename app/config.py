@@ -45,11 +45,16 @@ class Settings(BaseSettings):
     # -- Retrieval ----------------------------------------------------------
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     retrieval_k: int = Field(default=6, ge=1, le=50)
-    #: The best relevance score must reach this for the knowledge base to answer
-    #: at all. Below it the KB tool returns NO_RELEVANT_CONTENT, which is what
-    #: makes the assistant say "not in the knowledge base" instead of inventing
-    #: destination facts.
-    relevance_floor: float = Field(default=0.35, ge=0.0, le=1.0)
+    #: Cosine-similarity floor below which the KB tool returns
+    #: NO_RELEVANT_CONTENT instead of weak chunks.
+    #:
+    #: Calibrated by measurement, not guessed (see docs/ARCHITECTURE.md section
+    #: 6.1). On this corpus, genuine travel questions score 0.62-0.86 and
+    #: unrelated questions 0.49-0.63, so 0.60 rejects clearly-unrelated queries
+    #: without rejecting real ones. It is deliberately a COARSE guard: the
+    #: ranges overlap, so no threshold can decide on its own whether retrieved
+    #: text actually answers the question -- that is the prompt's job.
+    relevance_floor: float = Field(default=0.60, ge=0.0, le=1.0)
     chunk_size: int = Field(default=900, ge=200)
     chunk_overlap: int = Field(default=120, ge=0)
 

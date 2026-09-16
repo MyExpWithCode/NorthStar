@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-09-16T05:05:10+00:00",
+  "updated_at": "2026-09-16T05:15:38+00:00",
   "sources": [
     {
       "source_id": "visitsingapore-essential",
@@ -54,7 +54,7 @@
       "doc_path": "data/kb/wikipedia-culture-of-singapore.md",
       "retrieved_at": "2026-09-16T04:55:03+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 22,
       "state": "available",
       "note": null
     },
@@ -68,7 +68,7 @@
       "doc_path": "data/kb/wikipedia-singapore-mrt.md",
       "retrieved_at": "2026-09-16T04:53:31+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 40,
       "state": "available",
       "note": null
     },
@@ -82,7 +82,7 @@
       "doc_path": "data/kb/wikipedia-singaporean-cuisine.md",
       "retrieved_at": "2026-09-16T04:54:38+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 38,
       "state": "available",
       "note": null
     },
@@ -96,7 +96,7 @@
       "doc_path": "data/kb/wikipedia-tourism-in-singapore.md",
       "retrieved_at": "2026-09-16T04:54:42+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 24,
       "state": "available",
       "note": null
     },
@@ -110,7 +110,7 @@
       "doc_path": "data/kb/wikivoyage-itinerary-southern-ridges-walk.md",
       "retrieved_at": "2026-09-16T05:04:59+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 15,
       "state": "available",
       "note": null
     },
@@ -124,7 +124,7 @@
       "doc_path": "data/kb/wikivoyage-itinerary-three-days.md",
       "retrieved_at": "2026-09-16T05:04:58+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 34,
       "state": "available",
       "note": null
     },
@@ -138,7 +138,7 @@
       "doc_path": "data/kb/wikivoyage-singapore.md",
       "retrieved_at": "2026-09-16T04:53:06+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 314,
       "state": "available",
       "note": null
     },
@@ -152,7 +152,7 @@
       "doc_path": "data/kb/wikivoyage-singapore-balestier.md",
       "retrieved_at": "2026-09-16T04:54:37+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 21,
       "state": "available",
       "note": null
     },
@@ -166,7 +166,7 @@
       "doc_path": "data/kb/wikivoyage-singapore-bugis.md",
       "retrieved_at": "2026-09-16T04:53:26+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 34,
       "state": "available",
       "note": null
     },
@@ -180,7 +180,7 @@
       "doc_path": "data/kb/wikivoyage-singapore-chinatown.md",
       "retrieved_at": "2026-09-16T04:53:20+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 45,
       "state": "available",
       "note": null
     },
@@ -194,7 +194,7 @@
       "doc_path": "data/kb/wikivoyage-singapore-east-coast.md",
       "retrieved_at": "2026-09-16T04:54:31+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 44,
       "state": "available",
       "note": null
     },
@@ -208,7 +208,7 @@
       "doc_path": "data/kb/wikivoyage-singapore-little-india.md",
       "retrieved_at": "2026-09-16T04:53:23+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 34,
       "state": "available",
       "note": null
     },
@@ -222,7 +222,7 @@
       "doc_path": "data/kb/wikivoyage-singapore-marina-bay.md",
       "retrieved_at": "2026-09-16T04:53:11+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 33,
       "state": "available",
       "note": null
     },
@@ -236,7 +236,7 @@
       "doc_path": "data/kb/wikivoyage-singapore-north-and-west.md",
       "retrieved_at": "2026-09-16T04:54:34+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 55,
       "state": "available",
       "note": null
     },
@@ -250,7 +250,7 @@
       "doc_path": "data/kb/wikivoyage-singapore-orchard.md",
       "retrieved_at": "2026-09-16T04:53:17+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 53,
       "state": "available",
       "note": null
     },
@@ -264,7 +264,7 @@
       "doc_path": "data/kb/wikivoyage-singapore-riverside.md",
       "retrieved_at": "2026-09-16T04:53:14+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 56,
       "state": "available",
       "note": null
     },
@@ -278,7 +278,7 @@
       "doc_path": "data/kb/wikivoyage-singapore-sentosa-harbourfront.md",
       "retrieved_at": "2026-09-16T04:54:28+00:00",
       "committed": true,
-      "chunk_count": 0,
+      "chunk_count": 64,
       "state": "available",
       "note": null
     }
