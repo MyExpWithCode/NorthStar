@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Knowledge base — Travel Planning Assistant</title>
+<title>NorthStar — Knowledge base</title>
 <!--
   The ingestion page. Its job is to make the RAG pipeline inspectable instead of
   hiding it behind scripts: what is indexed, under what licence, how many chunks
@@ -36,6 +36,10 @@
   }
   header h1 { font-size: 16px; margin: 0; font-weight: 600; }
   header .spacer { flex: 1; }
+  header .tagline {
+    font-size: 13px; color: var(--muted);
+    padding-left: 12px; border-left: 1px solid var(--line);
+  }
   a.btn, button {
     color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
     border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer;
@@ -126,7 +130,8 @@
 </head>
 <body>
 <header>
-  <h1>Knowledge base</h1>
+  <h1>NorthStar</h1>
+  <span class="tagline">Knowledge base</span>
   <span class="spacer"></span>
   <a class="btn" href="/">← Chat</a>
   <a class="btn" href="/health" target="_blank">Health</a>

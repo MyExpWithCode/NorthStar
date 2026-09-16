@@ -3,6 +3,15 @@
 Two providers are supported so the app runs wherever a key happens to exist:
 Groq by default (fast and free-tier friendly) and Anthropic when a key is set.
 
+A note on the model id, because it reads like a mistake: the default resolves
+to `openai/gpt-oss-120b`, which is served **by Groq**, not by OpenAI. GPT-OSS
+is OpenAI's open-weight model, and Groq namespaces catalogue entries by whoever
+published the weights -- the same way it lists `qwen/qwen3.8-27b` under
+Alibaba Cloud. Every request goes to api.groq.com with GROQ_API_KEY; there is no
+OpenAI credential anywhere in this project. Groq's endpoint path is also
+literally `/openai/v1/`, which is its OpenAI-compatible API surface rather than
+a call to OpenAI.
+
 The Groq model id is **resolved from the live catalogue at startup**, not
 hardcoded. Groq retires models regularly -- at the time of writing its
 catalogue contains 13 models and none of the `llama-3.3-*` ids that most

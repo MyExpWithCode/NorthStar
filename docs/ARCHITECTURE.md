@@ -1,4 +1,4 @@
-# Architecture — AI Travel Planning Assistant (Singapore)
+# Architecture — NorthStar
 
 > Design document, written before implementation. Diagrams are Mermaid and render directly on GitHub.
 > Status: design agreed in T0. Sections marked **as built** record where implementation differed.

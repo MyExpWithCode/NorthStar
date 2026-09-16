@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "northstar-travel-assistant"
+name = "northstar"
 version = "0.1.0"
-description = "AI Travel Planning Assistant for Singapore - RAG knowledge base + MCP tools"
+description = "NorthStar - travel planning assistant: per-destination RAG knowledge base + MCP tools"
 requires-python = ">=3.12"
 
 # Runtime dependencies are tracked in requirements.txt and added task by task,

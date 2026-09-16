@@ -1,4 +1,4 @@
-# AI Travel Planning Assistant
+# NorthStar
 
 > **Branch note.** This is `feat/multi-destination`. The knowledge base is
 > **per-destination**: retrieval is scoped to the place a question is about, and
@@ -82,6 +82,23 @@ Boundaries worth knowing:
 - **One process serves both pages**, so a rebuild started in `/admin` is immediately visible to chat.
 
 ---
+
+## A note on the model
+
+The default resolves to **`openai/gpt-oss-120b`**, which is confusing at a glance. To be explicit:
+
+| | |
+|---|---|
+| Provider | **Groq** — every request goes to `api.groq.com` with `GROQ_API_KEY` |
+| Model | **GPT-OSS 120B** — OpenAI's *open-weight* model (HF id `openai/gpt-oss-120b`), served on Groq |
+| OpenAI involvement | **none** — there is no OpenAI credential in this project and no request reaches OpenAI |
+
+Groq namespaces its catalogue by whoever published the weights, which is why the id carries an `openai/`
+prefix, exactly as `qwen/qwen3.8-27b` is listed under Alibaba Cloud. Groq's endpoint path is also literally
+`/openai/v1/` — that is its OpenAI-*compatible* API surface, not a call to OpenAI. `GET /health` reports
+`llm.provider` alongside `llm.model` so this is unambiguous at runtime.
+
+Set `LLM_PROVIDER=anthropic` with `ANTHROPIC_API_KEY` to use Claude instead.
 
 ## Destinations
 

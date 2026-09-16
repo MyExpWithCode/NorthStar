@@ -1,4 +1,4 @@
-# AI Travel Planning Assistant — Implementation Plan
+# NorthStar — Implementation Plan
 
 Plan of record, kept in the repo. Tasks run **one at a time**, each ending with its own verification step.
 Design is fixed first in [ARCHITECTURE.md](ARCHITECTURE.md); code follows it.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Travel Planning Assistant</title>
+<title>NorthStar — Travel Planning Assistant</title>
 <!--
   Deliberately one file, no build step. The interesting part of this UI is not
   its styling but the two evidence panels under every answer: knowledge-base
@@ -38,6 +38,10 @@
   }
   header button:hover, header a:hover { border-color: var(--accent); }
   #status { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  header .tagline {
+    font-size: 13px; color: var(--muted); margin-left: -8px;
+    padding-left: 12px; border-left: 1px solid var(--line);
+  }
 
   #banner {
     display: none; margin: 0; padding: 10px 20px;
@@ -122,7 +126,8 @@
 </head>
 <body>
 <header>
-  <h1>Travel Planning Assistant</h1>
+  <h1>NorthStar</h1>
+  <span class="tagline">Travel planning assistant</span>
   <span id="status">connecting…</span>
   <span class="spacer"></span>
   <button id="newchat" type="button">New conversation</button>
@@ -336,7 +341,7 @@ document.getElementById("newchat").addEventListener("click", async () => {
     const names = (health.knowledge_base.destinations || [])
       .map((d) => d.destination);
     statusEl.textContent =
-      `${health.llm.model || "no model"} · ${kb.chunk_count || 0} chunks · `
+      `${health.llm.provider}:${health.llm.model || "no model"} · ${kb.chunk_count || 0} chunks · `
       + `${names.length} destination${names.length === 1 ? "" : "s"} · `
       + `${Object.values(health.mcp.servers || {}).flat().length} MCP tools`;
     const coverage = document.getElementById("coverage");

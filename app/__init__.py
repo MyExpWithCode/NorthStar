@@ -1,1 +1,4 @@
-"""AI Travel Planning Assistant -- per-destination RAG knowledge base + MCP tools."""
+"""NorthStar -- a travel planning assistant.
+
+Per-destination RAG knowledge base plus MCP tools for live information.
+"""

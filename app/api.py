@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AI Travel Planning Assistant",
+    title="NorthStar",
     description=(
         "Travel assistant combining a per-destination RAG knowledge base with "
         "live information from MCP tools."
