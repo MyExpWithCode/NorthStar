@@ -25,7 +25,7 @@ Design is fixed first in [ARCHITECTURE.md](ARCHITECTURE.md); code follows it.
 | T15 | Chat UI | ✅ done — provenance panels, degraded banner |
 | T16 | Ingestion UI (`/admin`) | ✅ done — preview, confirm, job log, remove |
 | T17 | Failure-path hardening | ✅ done — 26/26 failure paths verified |
-| T18 | Sample Q&A document | ⚠ 13/21 turns captured — resumable, see note |
+| T18 | Sample Q&A document | ✅ done — 21/21 turns, all verbatim |
 | T19 | README + acceptance checklist | ✅ done — README, ACCEPTANCE.md |
 | T20 | Demo materials | ✅ done — DEMO.md run sheet |
 
