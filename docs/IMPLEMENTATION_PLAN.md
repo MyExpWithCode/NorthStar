@@ -17,7 +17,7 @@ Design is fixed first in [ARCHITECTURE.md](ARCHITECTURE.md); code follows it.
 | T7 | MCP server 2 — currency | ✅ done — 2 tools, stdio verified |
 | T8 | MCP client wiring | ✅ done — 4 tools, per-server degradation |
 | T9 | LLM factory | ✅ done — resolved openai/gpt-oss-120b, tool calls verified |
-| T10 | Prompt engineering | ⬜ |
+| T10 | Prompt engineering | ✅ done — `app/prompts.py`, [PROMPT_STRATEGY.md](PROMPT_STRATEGY.md) |
 | T11 | Agent assembly | ⬜ |
 | T12 | Document parsers — md/txt/html/pdf/docx | ⬜ |
 | T13 | Ingestion service + job runner | ⬜ |
